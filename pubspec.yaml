@@ -1,0 +1,63 @@
+name: keepup
+description: 혼자 쓰는 습관 챌린지 인증 앱 (적립형/결과형 + 마감 3시간 전 알림)
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'   # Flutter 3.22+ (Material3 surfaceContainer 색상 토큰 사용)
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # 로컬 알림 (마감 3시간 전 알림의 핵심)
+  flutter_local_notifications: ^22.0.1
+  timezone: ^0.11.1
+  flutter_timezone: ^5.1.0   # 기기의 로컬 타임존 이름 확보
+
+  # 사진 촬영/선택 + 저장
+  image_picker: ^1.1.2
+  path_provider: ^2.1.4
+  image: ^4.2.0          # 사진에 날짜 워터마크 삽입
+
+  # 데이터 저장
+  shared_preferences: ^2.3.2
+
+  # 날짜 포맷
+  intl: ^0.20.3
+
+  # OS 공유 시트 (카톡 등으로 인증 공유)
+  share_plus: ^13.2.0
+
+  # 오늘의 명언 원격 갱신 (keepup.keywordream.com/api/quotes, 실패 시 내장 JSON 사용)
+  http: ^1.2.2
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/quotes.json
+
+  # 네이버 나눔고딕 (OFL 라이선스, 오프라인 번들)
+  fonts:
+    - family: NanumGothic
+      fonts:
+        - asset: assets/fonts/NanumGothic-Regular.ttf
+        - asset: assets/fonts/NanumGothic-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/NanumGothic-ExtraBold.ttf
+          weight: 800
+
+# 앱 아이콘 생성: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/icon.png
+  adaptive_icon_background: "#4C6EF5"
+  adaptive_icon_foreground: assets/icon/icon_fg.png
+  remove_alpha_ios: true
