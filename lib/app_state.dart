@@ -113,9 +113,9 @@ class AppState extends ChangeNotifier {
 
   // ---- 조회 헬퍼 ----
 
-  /// 오늘 의무 인증 대상 루틴들
+  /// 오늘 인증 가능한 루틴들 (결과형은 주중 내내 열림 — 마감은 일요일)
   List<Routine> dutyRoutinesForDay(DateTime day) =>
-      routines.where((r) => r.isDutyDay(day)).toList();
+      routines.where((r) => r.canCertifyOn(day)).toList();
 
   /// 특정 루틴이 특정 날짜에 인증됐는지
   bool isCertified(String routineId, DateTime day) {

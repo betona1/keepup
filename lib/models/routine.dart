@@ -113,6 +113,23 @@ class Routine {
     };
   }
 
+  /// 오늘 인증을 '할 수 있는' 날인지 — 결과형은 주중 언제든 미리 인증 가능
+  bool canCertifyOn(DateTime date) {
+    final d = _dateOnly(date);
+    if (d.isBefore(startDate) || d.isAfter(endDate)) return false;
+    if (dutyCycle == DutyCycle.weeklySunday) return true; // 주중 아무 때나
+    return isDutyDay(date);
+  }
+
+  /// 인증이 카운트되는 의무일 — 결과형은 그 주 일요일, 나머지는 그날
+  DateTime dutyKeyDate(DateTime date) {
+    final d = _dateOnly(date);
+    if (dutyCycle != DutyCycle.weeklySunday) return d;
+    final sunday = d.add(Duration(days: DateTime.sunday - d.weekday));
+    // 주 마감(일요일)이 시즌 종료일을 넘으면 종료일로 캡
+    return sunday.isAfter(endDate) ? endDate : sunday;
+  }
+
   /// 시즌이 끝났는지
   bool isEnded(DateTime today) => _dateOnly(today).isAfter(endDate);
 

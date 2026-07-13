@@ -24,10 +24,11 @@ class HomeBody extends StatelessWidget {
 
         final duty = state.dutyRoutinesForDay(today);
         final resting = state.routines
-            .where((r) => !r.isDutyDay(today) && !r.isEnded(today))
+            .where((r) => !r.canCertifyOn(today) && !r.isEnded(today))
             .toList();
-        final done =
-            duty.where((r) => state.isCertified(r.id, today)).length;
+        final done = duty
+            .where((r) => state.isCertified(r.id, r.dutyKeyDate(today)))
+            .length;
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
@@ -174,8 +175,10 @@ class _RoutineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final certified = state.isCertified(routine.id, day);
-    final deadline = routine.deadlineOf(day);
+    // 결과형은 이번 주 일요일 기준으로 인증·마감을 계산 (주중 미리 인증 가능)
+    final effDay = routine.dutyKeyDate(day);
+    final certified = state.isCertified(routine.id, effDay);
+    final deadline = routine.deadlineOf(effDay);
     final remaining = deadline.difference(DateTime.now());
     final urgent = !certified && !remaining.isNegative && remaining.inHours < 3;
 
@@ -188,7 +191,7 @@ class _RoutineCard extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (_) => CertifyScreen(
-                        state: state, routine: routine, day: day),
+                        state: state, routine: routine, day: effDay),
                   ),
                 ),
         onLongPress: () => _showManageSheet(context),
@@ -408,6 +411,7 @@ class _DeadlineChip extends StatelessWidget {
   }
 
   String _fmt(Duration d) {
+    if (d.inDays > 0) return '${d.inDays}일 ${d.inHours % 24}시간';
     final h = d.inHours;
     final m = d.inMinutes % 60;
     if (h > 0) return '$h시간 $m분';
