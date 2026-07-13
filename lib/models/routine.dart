@@ -18,6 +18,7 @@ enum VerifyMethod {
   photo, // 사진 (날짜 워터마크)
   timer, // 앱 내 타이머 (n분 이상 측정)
   audio, // 녹음 (발음 연습 등)
+  video, // 동영상 (명상·운동 장면)
 }
 
 extension RoutineTypeLabel on RoutineType {
@@ -40,12 +41,14 @@ extension VerifyMethodLabel on VerifyMethod {
         VerifyMethod.photo => '사진 인증',
         VerifyMethod.timer => '타이머 인증',
         VerifyMethod.audio => '녹음 인증',
+        VerifyMethod.video => '동영상 인증',
       };
 
   String get description => switch (this) {
         VerifyMethod.photo => '실행 장면을 촬영 — 날짜·시각 워터마크 자동',
         VerifyMethod.timer => '앱 타이머로 목표 시간 측정 (독서·명상·공부)',
         VerifyMethod.audio => '음성 녹음으로 남기기 (발음 연습·낭독)',
+        VerifyMethod.video => '짧은 영상으로 남기기 (명상·운동 장면)',
       };
 }
 
@@ -65,6 +68,7 @@ class Routine {
   final DateTime createdAt;
   final VerifyMethod verifyMethod;
   final int timerMinutes; // 타이머 인증 목표(분)
+  final bool requireNote; // 소감/느낀점 필수 작성
   final DateTime startDate; // 시즌 시작일 (날짜만)
   final DateTime endDate; // 완료 목표일 (기본: 시작 +62일 = 63일간)
   int changeUsedCount; // 루틴 변경 찬스 사용 횟수 (0 또는 1)
@@ -80,6 +84,7 @@ class Routine {
     required this.createdAt,
     this.verifyMethod = VerifyMethod.photo,
     this.timerMinutes = 15,
+    this.requireNote = false,
     DateTime? startDate,
     DateTime? endDate,
     this.changeUsedCount = 0,
@@ -131,6 +136,7 @@ class Routine {
         'createdAt': createdAt.toIso8601String(),
         'verifyMethod': verifyMethod.name,
         'timerMinutes': timerMinutes,
+        'requireNote': requireNote,
         'startDate': startDate.toIso8601String(),
         'endDate': endDate.toIso8601String(),
         'changeUsedCount': changeUsedCount,
@@ -149,6 +155,7 @@ class Routine {
             ? VerifyMethod.values.byName(j['verifyMethod'] as String)
             : VerifyMethod.photo,
         timerMinutes: (j['timerMinutes'] as num?)?.toInt() ?? 15,
+        requireNote: j['requireNote'] as bool? ?? false,
         startDate: j['startDate'] != null
             ? DateTime.parse(j['startDate'] as String)
             : null,
@@ -172,6 +179,7 @@ class Certification {
   final String verifyMethod; // 인증에 사용한 검증 방식 (photo/timer/audio)
   final int? durationSec; // 타이머 인증: 측정 시간(초)
   final String? audioPath; // 녹음 인증: 음성 파일 경로
+  final String? videoPath; // 동영상 인증: 영상 파일 경로
 
   Certification({
     required this.id,
@@ -185,6 +193,7 @@ class Certification {
     this.verifyMethod = 'photo',
     this.durationSec,
     this.audioPath,
+    this.videoPath,
   });
 
   bool get hasPhoto => photoPath.isNotEmpty;
@@ -201,6 +210,7 @@ class Certification {
         'verifyMethod': verifyMethod,
         'durationSec': durationSec,
         'audioPath': audioPath,
+        'videoPath': videoPath,
       };
 
   factory Certification.fromJson(Map<String, dynamic> j) => Certification(
@@ -215,5 +225,6 @@ class Certification {
         verifyMethod: j['verifyMethod'] as String? ?? 'photo',
         durationSec: (j['durationSec'] as num?)?.toInt(),
         audioPath: j['audioPath'] as String?,
+        videoPath: j['videoPath'] as String?,
       );
 }

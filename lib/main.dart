@@ -9,6 +9,7 @@ import 'theme.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 import 'screens/home_screen.dart';
+import 'widgets/marquee_text.dart';
 import 'screens/history_screen.dart';
 import 'screens/add_routine_screen.dart';
 
@@ -90,10 +91,37 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final titles = ['오늘의 습관', '기록 · 추억'];
+    final titles = ['습관챌린지', '기록 · 추억'];
     return Scaffold(
       appBar: AppBar(
-        title: Text(titles[_index]),
+        toolbarHeight: 66,
+        title: _index == 0
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(titles[0]),
+                  // 내가 선언한 습관들이 전광판처럼 흐른다
+                  ListenableBuilder(
+                    listenable: widget.state,
+                    builder: (context, _) {
+                      final names = widget.state.routines
+                          .map((r) => r.title)
+                          .join('  ·  ');
+                      if (names.isEmpty) return const SizedBox.shrink();
+                      return MarqueeText(
+                        text: names,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              )
+            : Text(titles[_index]),
         actions: [
           // [임시] 알림 동작 확인 버튼 — 실기기 테스트 끝나면 제거
           IconButton(

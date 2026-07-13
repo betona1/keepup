@@ -15,6 +15,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
   DutyCycle _accumCycle = DutyCycle.everyday;
   VerifyMethod _verify = VerifyMethod.photo;
   int _timerMinutes = 15;
+  bool _requireNote = false;
   late DateTime _endDate; // 완료 목표일 (기본 63일)
 
   final _title = TextEditingController();
@@ -63,6 +64,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
       createdAt: DateTime.now(),
       verifyMethod: _verify,
       timerMinutes: _timerMinutes,
+      requireNote: _requireNote,
       endDate: _endDate,
     );
     await widget.state.addRoutine(r);
@@ -224,7 +226,16 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
               ],
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          // 소감 필수 — 명상 등 내면 기록이 중요한 습관용
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _requireNote,
+            onChanged: (v) => setState(() => _requireNote = v),
+            title: const Text('소감/느낀점 필수 작성'),
+            subtitle: const Text('인증할 때 오늘의 느낌을 꼭 적게 합니다 (명상·독서 추천)'),
+          ),
+          const SizedBox(height: 8),
           // ── 완료 목표일 — 기본 63일 (습관이 몸에 붙는 9주) ──
           Text('완료 목표일', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
@@ -310,6 +321,7 @@ class _VerifyCard extends StatelessWidget {
         VerifyMethod.photo => Icons.photo_camera_outlined,
         VerifyMethod.timer => Icons.timer_outlined,
         VerifyMethod.audio => Icons.mic_none_rounded,
+        VerifyMethod.video => Icons.videocam_outlined,
       };
 
   @override

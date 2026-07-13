@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:video_player/video_player.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
 import '../services/watermark_service.dart';
@@ -48,6 +49,10 @@ class _CertifyScreenState extends State<CertifyScreen> {
   bool _recording = false;
   bool _playing = false;
 
+  // 동영상 인증
+  String? _videoPath;
+  VideoPlayerController? _videoCtrl;
+
   VerifyMethod get _method => widget.routine.verifyMethod;
 
   @override
@@ -65,7 +70,29 @@ class _CertifyScreenState extends State<CertifyScreen> {
     _ticker?.cancel();
     _recorder.dispose();
     _player.dispose();
+    _videoCtrl?.dispose();
     super.dispose();
+  }
+
+  // ── 동영상 ──
+  Future<void> _pickVideo(ImageSource source) async {
+    final x = await _picker.pickVideo(
+      source: source,
+      maxDuration: const Duration(minutes: 5),
+    );
+    if (x == null) return;
+    // 캐시 정리에 안전하도록 앱 문서 폴더로 복사
+    final dir = await getApplicationDocumentsDirectory();
+    final dest =
+        '${dir.path}/vid_${DateTime.now().millisecondsSinceEpoch}${x.path.substring(x.path.lastIndexOf('.'))}';
+    await File(x.path).copy(dest);
+    await _videoCtrl?.dispose();
+    final ctrl = VideoPlayerController.file(File(dest));
+    await ctrl.initialize();
+    setState(() {
+      _videoPath = dest;
+      _videoCtrl = ctrl;
+    });
   }
 
   Future<void> _pick(ImageSource source) async {
@@ -142,6 +169,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
         VerifyMethod.photo => _pickedPath != null,
         VerifyMethod.timer => _timerDone,
         VerifyMethod.audio => _audioPath != null && !_recording,
+        VerifyMethod.video => _videoPath != null,
       };
 
   String get _blockReason => switch (_method) {
@@ -149,12 +177,19 @@ class _CertifyScreenState extends State<CertifyScreen> {
         VerifyMethod.timer =>
           '타이머로 ${widget.routine.timerMinutes}분을 채우면 인증할 수 있어요',
         VerifyMethod.audio => '녹음을 완료하면 인증할 수 있어요',
+        VerifyMethod.video => '인증 동영상을 먼저 촬영/선택해 주세요',
       };
 
   Future<void> _submit() async {
     if (!_canSubmit) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(_blockReason)));
+      return;
+    }
+    if (widget.routine.requireNote && _memo.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('오늘의 소감/느낀점을 적어주세요 (이 루틴은 필수예요)')),
+      );
       return;
     }
     setState(() => _saving = true);
@@ -180,6 +215,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
       verifyMethod: _method.name,
       durationSec: _method == VerifyMethod.timer ? _elapsedSec : null,
       audioPath: _method == VerifyMethod.audio ? _audioPath : null,
+      videoPath: _method == VerifyMethod.video ? _videoPath : null,
     );
     await widget.state.addCertification(cert);
 
@@ -271,6 +307,33 @@ class _CertifyScreenState extends State<CertifyScreen> {
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
           ],
+          if (_method == VerifyMethod.video) ...[
+            _VideoBox(controller: _videoCtrl),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickVideo(ImageSource.camera),
+                    icon: const Icon(Icons.videocam),
+                    label: const Text('영상 촬영'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickVideo(ImageSource.gallery),
+                    icon: const Icon(Icons.video_library),
+                    label: const Text('갤러리'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('인증 사진 (선택)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+          ],
           _PhotoArea(path: _pickedPath, optional: _method != VerifyMethod.photo),
           const SizedBox(height: 12),
           Row(
@@ -310,9 +373,11 @@ class _CertifyScreenState extends State<CertifyScreen> {
           TextField(
             controller: _memo,
             maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: '메모 (선택)',
-              hintText: '오늘 실행 소감이나 기록',
+            decoration: InputDecoration(
+              labelText: widget.routine.requireNote
+                  ? '오늘의 소감 / 느낀점 (필수)'
+                  : '오늘의 소감 / 느낀점 (선택)',
+              hintText: '오늘 실행하며 느낀 점, 배운 점을 남겨보세요',
             ),
           ),
           if (r.type == RoutineType.accumulate && r.backupTitle != null) ...[
@@ -427,6 +492,69 @@ class _TimerBox extends StatelessWidget {
               ],
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// 동영상 인증 박스 — 선택한 영상 미리보기 + 재생
+class _VideoBox extends StatefulWidget {
+  final VideoPlayerController? controller;
+  const _VideoBox({this.controller});
+
+  @override
+  State<_VideoBox> createState() => _VideoBoxState();
+}
+
+class _VideoBoxState extends State<_VideoBox> {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final ctrl = widget.controller;
+    return AspectRatio(
+      aspectRatio: 4 / 3,
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ctrl == null || !ctrl.value.isInitialized
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.videocam_outlined,
+                        size: 40, color: cs.onSurfaceVariant),
+                    const SizedBox(height: 8),
+                    Text('인증 동영상 (최대 5분)',
+                        style: TextStyle(color: cs.onSurfaceVariant)),
+                  ],
+                ),
+              )
+            : Stack(
+                alignment: Alignment.center,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: ctrl.value.size.width,
+                      height: ctrl.value.size.height,
+                      child: VideoPlayer(ctrl),
+                    ),
+                  ),
+                  IconButton.filled(
+                    onPressed: () {
+                      setState(() {
+                        ctrl.value.isPlaying ? ctrl.pause() : ctrl.play();
+                      });
+                    },
+                    icon: Icon(ctrl.value.isPlaying
+                        ? Icons.pause
+                        : Icons.play_arrow),
+                  ),
+                ],
+              ),
       ),
     );
   }

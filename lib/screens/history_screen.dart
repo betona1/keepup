@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 import 'package:intl/intl.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
@@ -312,6 +313,7 @@ class _CertDetailDialog extends StatefulWidget {
 class _CertDetailDialogState extends State<_CertDetailDialog> {
   final _player = AudioPlayer();
   bool _playing = false;
+  VideoPlayerController? _videoCtrl;
 
   @override
   void initState() {
@@ -319,11 +321,19 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
     _player.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playing = false);
     });
+    final vp = widget.cert.videoPath;
+    if (vp != null && File(vp).existsSync()) {
+      _videoCtrl = VideoPlayerController.file(File(vp))
+        ..initialize().then((_) {
+          if (mounted) setState(() {});
+        });
+    }
   }
 
   @override
   void dispose() {
     _player.dispose();
+    _videoCtrl?.dispose();
     super.dispose();
   }
 
@@ -348,6 +358,27 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
           children: [
             if (cert.hasPhoto && File(cert.photoPath).existsSync())
               Image.file(File(cert.photoPath)),
+            // 동영상 인증 재생
+            if (_videoCtrl != null && _videoCtrl!.value.isInitialized)
+              AspectRatio(
+                aspectRatio: _videoCtrl!.value.aspectRatio,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    VideoPlayer(_videoCtrl!),
+                    IconButton.filled(
+                      onPressed: () => setState(() {
+                        _videoCtrl!.value.isPlaying
+                            ? _videoCtrl!.pause()
+                            : _videoCtrl!.play();
+                      }),
+                      icon: Icon(_videoCtrl!.value.isPlaying
+                          ? Icons.pause
+                          : Icons.play_arrow),
+                    ),
+                  ],
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -395,6 +426,7 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                             'timer' => '⏱ 타이머 인증'
                                 '${cert.durationSec != null ? ' · ${_fmtDuration(cert.durationSec!)} 수행' : ''}',
                             'audio' => '🎙 녹음 인증',
+                            'video' => '🎬 동영상 인증',
                             _ => '📷 사진 인증 (날짜 워터마크)',
                           },
                           style:
@@ -485,7 +517,9 @@ class _CertTile extends StatelessWidget {
                               ? Icons.timer_outlined
                               : cert.verifyMethod == 'audio'
                                   ? Icons.mic_rounded
-                                  : Icons.image_not_supported,
+                                  : cert.verifyMethod == 'video'
+                                      ? Icons.videocam_rounded
+                                      : Icons.image_not_supported,
                           size: 36,
                           color: cs.onSurfaceVariant,
                         ),
