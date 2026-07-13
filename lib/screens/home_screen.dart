@@ -23,8 +23,9 @@ class HomeBody extends StatelessWidget {
         }
 
         final duty = state.dutyRoutinesForDay(today);
-        final resting =
-            state.routines.where((r) => !r.isDutyDay(today)).toList();
+        final resting = state.routines
+            .where((r) => !r.isDutyDay(today) && !r.isEnded(today))
+            .toList();
         final done =
             duty.where((r) => state.isCertified(r.id, today)).length;
 
@@ -233,6 +234,33 @@ class _RoutineCard extends StatelessWidget {
                           certified: certified,
                           remaining: remaining,
                           urgent: urgent,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 9),
+                    // 성취 완성도 % + D-day
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(999),
+                            child: LinearProgressIndicator(
+                              value:
+                                  state.progressPercent(routine.id) / 100,
+                              minHeight: 5,
+                              backgroundColor: cs.surfaceContainerHighest,
+                              color: AppTheme.stamp,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${state.progressPercent(routine.id)}% · D-${routine.daysLeft(DateTime.now()).clamp(0, 999)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),

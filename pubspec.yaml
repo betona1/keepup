@@ -33,6 +33,10 @@ dependencies:
   # 오늘의 명언 원격 갱신 (keepup.keywordream.com/api/quotes, 실패 시 내장 JSON 사용)
   http: ^1.2.2
 
+  # 녹음 인증 (발음 연습) + 재생
+  record: ^6.1.2
+  audioplayers: ^6.1.0
+
 dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4

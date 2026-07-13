@@ -1,10 +1,15 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
 import '../services/watermark_service.dart';
 import '../services/share_service.dart';
+import '../theme.dart';
 
 class CertifyScreen extends StatefulWidget {
   final AppState state;
@@ -29,10 +34,37 @@ class _CertifyScreenState extends State<CertifyScreen> {
   bool _isBackup = false;
   bool _saving = false;
 
+  // 타이머 인증
+  Timer? _ticker;
+  int _elapsedSec = 0;
+  bool _running = false;
+  bool get _timerDone =>
+      _elapsedSec >= widget.routine.timerMinutes * 60;
+
+  // 녹음 인증
+  final _recorder = AudioRecorder();
+  final _player = AudioPlayer();
+  String? _audioPath;
+  bool _recording = false;
+  bool _playing = false;
+
+  VerifyMethod get _method => widget.routine.verifyMethod;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playing = false);
+    });
+  }
+
   @override
   void dispose() {
     _memo.dispose();
     _progress.dispose();
+    _ticker?.cancel();
+    _recorder.dispose();
+    _player.dispose();
     super.dispose();
   }
 
@@ -45,18 +77,94 @@ class _CertifyScreenState extends State<CertifyScreen> {
     if (x != null) setState(() => _pickedPath = x.path);
   }
 
+  // ── 타이머 ──
+  void _toggleTimer() {
+    if (_running) {
+      _ticker?.cancel();
+      setState(() => _running = false);
+    } else {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        setState(() => _elapsedSec++);
+      });
+      setState(() => _running = true);
+    }
+  }
+
+  void _resetTimer() {
+    _ticker?.cancel();
+    setState(() {
+      _running = false;
+      _elapsedSec = 0;
+    });
+  }
+
+  // ── 녹음 ──
+  Future<void> _toggleRecord() async {
+    if (_recording) {
+      final path = await _recorder.stop();
+      setState(() {
+        _recording = false;
+        _audioPath = path;
+      });
+      return;
+    }
+    if (!await _recorder.hasPermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('마이크 권한을 허용해 주세요')),
+        );
+      }
+      return;
+    }
+    final dir = await getApplicationDocumentsDirectory();
+    final path =
+        '${dir.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc),
+        path: path);
+    setState(() {
+      _recording = true;
+      _audioPath = null;
+    });
+  }
+
+  Future<void> _togglePlay() async {
+    if (_audioPath == null) return;
+    if (_playing) {
+      await _player.stop();
+      setState(() => _playing = false);
+    } else {
+      await _player.play(DeviceFileSource(_audioPath!));
+      setState(() => _playing = true);
+    }
+  }
+
+  bool get _canSubmit => switch (_method) {
+        VerifyMethod.photo => _pickedPath != null,
+        VerifyMethod.timer => _timerDone,
+        VerifyMethod.audio => _audioPath != null && !_recording,
+      };
+
+  String get _blockReason => switch (_method) {
+        VerifyMethod.photo => '인증 사진을 먼저 선택해 주세요',
+        VerifyMethod.timer =>
+          '타이머로 ${widget.routine.timerMinutes}분을 채우면 인증할 수 있어요',
+        VerifyMethod.audio => '녹음을 완료하면 인증할 수 있어요',
+      };
+
   Future<void> _submit() async {
-    if (_pickedPath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('인증 사진을 먼저 선택해 주세요')),
-      );
+    if (!_canSubmit) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(_blockReason)));
       return;
     }
     setState(() => _saving = true);
     final now = DateTime.now();
 
-    // 사진에 날짜·시각 워터마크 자동 삽입
-    final stampedPath = await WatermarkService.stamp(_pickedPath!, now);
+    // 사진이 있으면 날짜·시각 워터마크 자동 삽입 (타이머/녹음은 사진 선택)
+    String stampedPath = '';
+    if (_pickedPath != null) {
+      stampedPath = await WatermarkService.stamp(_pickedPath!, now);
+    }
 
     final cert = Certification(
       id: now.microsecondsSinceEpoch.toString(),
@@ -69,6 +177,9 @@ class _CertifyScreenState extends State<CertifyScreen> {
           : null,
       timestamp: now,
       isBackup: _isBackup,
+      verifyMethod: _method.name,
+      durationSec: _method == VerifyMethod.timer ? _elapsedSec : null,
+      audioPath: _method == VerifyMethod.audio ? _audioPath : null,
     );
     await widget.state.addCertification(cert);
 
@@ -88,10 +199,16 @@ class _CertifyScreenState extends State<CertifyScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('인증 완료! ✅',
-                  style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const StampMark(size: 40, filledCheck: true),
+                  const SizedBox(width: 10),
+                  const Text('도장 찍었습니다!',
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w800)),
+                ],
+              ),
+              const SizedBox(height: 8),
               const Text('카카오톡 오픈채팅방 등에 공유할까요?\n(공유 시트에서 방을 직접 골라 전송하면 됩니다)',
                   style: TextStyle(fontSize: 13)),
               const SizedBox(height: 16),
@@ -103,8 +220,8 @@ class _CertifyScreenState extends State<CertifyScreen> {
                 },
                 icon: const Icon(Icons.ios_share),
                 label: const Text('공유하기'),
-                style:
-                    FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48)),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(sheetCtx),
@@ -126,7 +243,35 @@ class _CertifyScreenState extends State<CertifyScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _PhotoArea(path: _pickedPath),
+          // ── 검증 방식별 메인 영역 ──
+          if (_method == VerifyMethod.timer) ...[
+            _TimerBox(
+              elapsedSec: _elapsedSec,
+              targetMin: r.timerMinutes,
+              running: _running,
+              done: _timerDone,
+              onToggle: _toggleTimer,
+              onReset: _resetTimer,
+            ),
+            const SizedBox(height: 16),
+            Text('인증 사진 (선택)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+          ],
+          if (_method == VerifyMethod.audio) ...[
+            _RecorderBox(
+              recording: _recording,
+              hasAudio: _audioPath != null,
+              playing: _playing,
+              onToggleRecord: _toggleRecord,
+              onTogglePlay: _togglePlay,
+            ),
+            const SizedBox(height: 16),
+            Text('인증 사진 (선택)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+          ],
+          _PhotoArea(path: _pickedPath, optional: _method != VerifyMethod.photo),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -188,7 +333,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
                     dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.check_circle),
-            label: Text(_saving ? '저장 중...' : '인증하기'),
+            label: Text(_saving ? '저장 중...' : '도장 찍기'),
             style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52)),
           ),
@@ -198,9 +343,173 @@ class _CertifyScreenState extends State<CertifyScreen> {
   }
 }
 
+/// 타이머 인증 박스 — 목표 시간을 채우면 인증 가능
+class _TimerBox extends StatelessWidget {
+  final int elapsedSec;
+  final int targetMin;
+  final bool running;
+  final bool done;
+  final VoidCallback onToggle;
+  final VoidCallback onReset;
+  const _TimerBox({
+    required this.elapsedSec,
+    required this.targetMin,
+    required this.running,
+    required this.done,
+    required this.onToggle,
+    required this.onReset,
+  });
+
+  String _fmt(int sec) =>
+      '${(sec ~/ 60).toString().padLeft(2, '0')}:${(sec % 60).toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final progress = (elapsedSec / (targetMin * 60)).clamp(0.0, 1.0);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: done ? AppTheme.stamp : cs.outlineVariant,
+            width: done ? 1.6 : 1),
+      ),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 150,
+                height: 150,
+                child: CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 10,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  color: done ? AppTheme.stamp : cs.primary,
+                  strokeCap: StrokeCap.round,
+                ),
+              ),
+              Column(
+                children: [
+                  Text(_fmt(elapsedSec),
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        color: done ? AppTheme.stamp : cs.onSurface,
+                      )),
+                  Text('목표 $targetMin분',
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (done)
+            const Text('목표 달성! 이제 도장을 찍을 수 있어요 🎉',
+                style: TextStyle(
+                    color: AppTheme.stamp, fontWeight: FontWeight.w700)),
+          if (!done)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FilledButton.icon(
+                  onPressed: onToggle,
+                  icon: Icon(running ? Icons.pause : Icons.play_arrow),
+                  label: Text(running ? '일시정지' : (elapsedSec > 0 ? '계속' : '시작')),
+                ),
+                const SizedBox(width: 10),
+                if (elapsedSec > 0 && !running)
+                  OutlinedButton(onPressed: onReset, child: const Text('리셋')),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 녹음 인증 박스
+class _RecorderBox extends StatelessWidget {
+  final bool recording;
+  final bool hasAudio;
+  final bool playing;
+  final VoidCallback onToggleRecord;
+  final VoidCallback onTogglePlay;
+  const _RecorderBox({
+    required this.recording,
+    required this.hasAudio,
+    required this.playing,
+    required this.onToggleRecord,
+    required this.onTogglePlay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: recording
+                ? AppTheme.stamp
+                : (hasAudio ? cs.primary : cs.outlineVariant),
+            width: recording || hasAudio ? 1.6 : 1),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            recording ? Icons.graphic_eq_rounded : Icons.mic_rounded,
+            size: 56,
+            color: recording ? AppTheme.stamp : cs.primary,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            recording
+                ? '녹음 중... 끝나면 정지를 누르세요'
+                : hasAudio
+                    ? '녹음 완료! 들어보고 도장을 찍으세요'
+                    : '발음 연습·낭독을 녹음으로 남겨요',
+            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FilledButton.icon(
+                onPressed: onToggleRecord,
+                style: recording
+                    ? FilledButton.styleFrom(
+                        backgroundColor: AppTheme.stamp)
+                    : null,
+                icon: Icon(recording ? Icons.stop : Icons.fiber_manual_record),
+                label: Text(recording ? '정지' : (hasAudio ? '다시 녹음' : '녹음 시작')),
+              ),
+              if (hasAudio && !recording) ...[
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: onTogglePlay,
+                  icon: Icon(playing ? Icons.stop : Icons.play_arrow),
+                  label: Text(playing ? '정지' : '들어보기'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PhotoArea extends StatelessWidget {
   final String? path;
-  const _PhotoArea({this.path});
+  final bool optional;
+  const _PhotoArea({this.path, this.optional = false});
 
   @override
   Widget build(BuildContext context) {
@@ -221,7 +530,8 @@ class _PhotoArea extends StatelessWidget {
                     Icon(Icons.add_a_photo,
                         size: 40, color: cs.onSurfaceVariant),
                     const SizedBox(height: 8),
-                    Text('인증 사진', style: TextStyle(color: cs.onSurfaceVariant)),
+                    Text(optional ? '인증 사진 (선택)' : '인증 사진',
+                        style: TextStyle(color: cs.onSurfaceVariant)),
                   ],
                 ),
               )

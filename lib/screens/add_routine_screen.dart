@@ -13,6 +13,9 @@ class AddRoutineScreen extends StatefulWidget {
 class _AddRoutineScreenState extends State<AddRoutineScreen> {
   RoutineType _type = RoutineType.accumulate;
   DutyCycle _accumCycle = DutyCycle.everyday;
+  VerifyMethod _verify = VerifyMethod.photo;
+  int _timerMinutes = 15;
+  late DateTime _endDate; // 완료 목표일 (기본 63일)
 
   final _title = TextEditingController();
   final _reason = TextEditingController();
@@ -20,6 +23,14 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
   final _target = TextEditingController();
 
   String? _titleError;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _endDate = DateTime(now.year, now.month, now.day)
+        .add(const Duration(days: 62)); // 오늘 포함 63일
+  }
 
   @override
   void dispose() {
@@ -49,6 +60,9 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
           ? _target.text.trim()
           : null,
       createdAt: DateTime.now(),
+      verifyMethod: _verify,
+      timerMinutes: _timerMinutes,
+      endDate: _endDate,
     );
     await widget.state.addRoutine(r);
     if (mounted) Navigator.pop(context);
@@ -177,7 +191,78 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
                   '실행 여부를 판단할 수 있도록 목표를 구체적으로 적어주세요.',
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
+          // ── 검증 방식 선택 — 루틴 성격에 맞게 고르기 쉽게 카드로 ──
+          Text('검증 방법', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          ...VerifyMethod.values.map((m) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _VerifyCard(
+                  method: m,
+                  selected: _verify == m,
+                  onTap: () => setState(() => _verify = m),
+                ),
+              )),
+          if (_verify == VerifyMethod.timer) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text('목표 시간',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                ...[10, 15, 20, 30, 60].map((min) => Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: ChoiceChip(
+                        label: Text('$min분'),
+                        selected: _timerMinutes == min,
+                        visualDensity: VisualDensity.compact,
+                        onSelected: (_) =>
+                            setState(() => _timerMinutes = min),
+                      ),
+                    )),
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
+          // ── 완료 목표일 — 기본 63일 (습관이 몸에 붙는 9주) ──
+          Text('완료 목표일', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _endDate,
+                      firstDate: now,
+                      lastDate: now.add(const Duration(days: 365)),
+                    );
+                    if (picked != null) setState(() => _endDate = picked);
+                  },
+                  icon: const Icon(Icons.event),
+                  label: Text(
+                      '${_endDate.year}.${_endDate.month.toString().padLeft(2, '0')}.${_endDate.day.toString().padLeft(2, '0')}'
+                      ' (${_endDate.difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays + 1}일간)'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ActionChip(
+                label: const Text('63일'),
+                onPressed: () {
+                  final now = DateTime.now();
+                  setState(() => _endDate =
+                      DateTime(now.year, now.month, now.day)
+                          .add(const Duration(days: 62)));
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('습관이 몸에 붙는 데 평균 66일 — KeepUp 기본 시즌은 63일(9주)입니다.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 16),
           TextField(
             controller: _reason,
             maxLines: 2,
@@ -195,6 +280,67 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
                 minimumSize: const Size.fromHeight(52)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 검증 방식 선택 카드 — 아이콘 + 설명으로 고르기 쉽게
+class _VerifyCard extends StatelessWidget {
+  final VerifyMethod method;
+  final bool selected;
+  final VoidCallback onTap;
+  const _VerifyCard(
+      {required this.method, required this.selected, required this.onTap});
+
+  IconData get _icon => switch (method) {
+        VerifyMethod.photo => Icons.photo_camera_outlined,
+        VerifyMethod.timer => Icons.timer_outlined,
+        VerifyMethod.audio => Icons.mic_none_rounded,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? cs.primary.withValues(alpha: 0.08)
+              : cs.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? cs.primary : cs.outlineVariant,
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(_icon, color: selected ? cs.primary : cs.onSurfaceVariant),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(method.label,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: selected ? cs.primary : cs.onSurface,
+                      )),
+                  const SizedBox(height: 2),
+                  Text(method.description,
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            if (selected) Icon(Icons.check_circle, color: cs.primary),
+          ],
+        ),
       ),
     );
   }

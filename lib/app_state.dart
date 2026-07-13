@@ -105,6 +105,27 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
+  /// 성취 완성도(%) — 시즌 전체 의무일 중 인증 완료한 비율 (0~100)
+  int progressPercent(String routineId) {
+    final r = routineById(routineId);
+    if (r == null) return 0;
+    final total = r.totalDutyDays();
+    if (total == 0) return 0;
+    final done = certs
+        .where((c) => c.routineId == routineId)
+        .map((c) => c.dateKey)
+        .toSet()
+        .length;
+    return ((done / total) * 100).round().clamp(0, 100);
+  }
+
+  /// 인증 완료한 의무일 수
+  int certifiedDayCount(String routineId) => certs
+      .where((c) => c.routineId == routineId)
+      .map((c) => c.dateKey)
+      .toSet()
+      .length;
+
   /// 미인증 카운트 (반장 제외 등은 혼자 쓰므로 생략, 순수 통계용)
   int missCountForRoutine(String routineId) {
     final r = routineById(routineId);

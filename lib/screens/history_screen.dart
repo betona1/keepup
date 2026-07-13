@@ -1,119 +1,428 @@
 import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
 import '../services/share_service.dart';
+import '../theme.dart';
 
-class HistoryBody extends StatelessWidget {
+class HistoryBody extends StatefulWidget {
   final AppState state;
   const HistoryBody({super.key, required this.state});
 
   @override
+  State<HistoryBody> createState() => _HistoryBodyState();
+}
+
+class _HistoryBodyState extends State<HistoryBody> {
+  String? _selectedRoutineId;
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: state,
+      listenable: widget.state,
       builder: (context, _) {
+        final state = widget.state;
         final certs = state.allCertsSorted();
-        if (certs.isEmpty) {
+        if (state.routines.isEmpty && certs.isEmpty) {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(32),
-              child: Text('아직 인증 기록이 없어요.\n첫 인증을 남기면 여기에 추억으로 쌓입니다.',
+              child: Text('아직 인증 기록이 없어요.\n첫 도장을 찍으면 여기에 추억으로 쌓입니다.',
                   textAlign: TextAlign.center),
             ),
           );
         }
-        return GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate:
-              const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.78,
-          ),
-          itemCount: certs.length,
-          itemBuilder: (context, i) {
-            final c = certs[i];
-            final r = state.routineById(c.routineId);
-            return _CertTile(cert: c, routine: r);
-          },
+
+        final routine = state.routineById(
+                _selectedRoutineId ?? state.routines.firstOrNull?.id ?? '') ??
+            state.routines.firstOrNull;
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          children: [
+            if (routine != null) ...[
+              // 루틴 선택 칩
+              SizedBox(
+                height: 36,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: state.routines.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (_, i) {
+                    final r = state.routines[i];
+                    return ChoiceChip(
+                      label: Text(r.title,
+                          style: const TextStyle(fontSize: 12)),
+                      selected: r.id == routine.id,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (_) =>
+                          setState(() => _selectedRoutineId = r.id),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              _StampCalendar(state: state, routine: routine),
+              const SizedBox(height: 24),
+            ],
+            if (certs.isNotEmpty) ...[
+              Text('전체 앨범', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 0.78,
+                ),
+                itemCount: certs.length,
+                itemBuilder: (context, i) {
+                  final c = certs[i];
+                  final r = state.routineById(c.routineId);
+                  return _CertTile(cert: c, routine: r);
+                },
+              ),
+            ],
+          ],
         );
       },
     );
   }
 }
 
-class _CertTile extends StatelessWidget {
-  final Certification cert;
-  final Routine? routine;
-  const _CertTile({required this.cert, required this.routine});
+/// ── 도장 달력 — 시즌 전체를 한눈에, 인증한 날엔 도장 ──
+class _StampCalendar extends StatelessWidget {
+  final AppState state;
+  final Routine routine;
+  const _StampCalendar({required this.state, required this.routine});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final file = File(cert.photoPath);
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final percent = state.progressPercent(routine.id);
+    final done = state.certifiedDayCount(routine.id);
+    final total = routine.totalDutyDays();
+    final daysLeft = routine.daysLeft(today);
+
+    // 주 단위 셀 목록 (월요일 시작으로 정렬)
+    final days = <DateTime>[];
+    var cursor = routine.startDate
+        .subtract(Duration(days: routine.startDate.weekday - 1));
+    while (!cursor.isAfter(routine.endDate)) {
+      days.add(cursor);
+      cursor = cursor.add(const Duration(days: 1));
+    }
+    // 마지막 주 채우기
+    while (days.length % 7 != 0) {
+      days.add(cursor);
+      cursor = cursor.add(const Duration(days: 1));
+    }
+
     return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _openDetail(context),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: file.existsSync()
-                  ? Image.file(file, fit: BoxFit.cover)
-                  : Container(
-                      color: cs.surfaceContainerHighest,
-                      child: Icon(Icons.image_not_supported,
-                          color: cs.onSurfaceVariant),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(routine?.title ?? '(삭제된 루틴)',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600)),
-                  Text(
-                    DateFormat('yyyy.MM.dd HH:mm').format(cert.timestamp),
-                    style: TextStyle(
-                        fontSize: 11, color: cs.onSurfaceVariant),
+            // 헤더: 기간 + D-day + 달성률
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(routine.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${DateFormat('yy.MM.dd').format(routine.startDate)}'
+                        ' ~ ${DateFormat('yy.MM.dd').format(routine.endDate)}'
+                        '${daysLeft >= 0 ? ' · D-$daysLeft' : ' · 시즌 종료'}',
+                        style: TextStyle(
+                            fontSize: 12, color: cs.onSurfaceVariant),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+                // 성취 완성도 %
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('$percent%',
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.stamp,
+                        )),
+                    Text('도장 $done / $total',
+                        style: TextStyle(
+                            fontSize: 11, color: cs.onSurfaceVariant)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: percent / 100,
+                minHeight: 8,
+                backgroundColor: cs.surfaceContainerHighest,
+                color: AppTheme.stamp,
               ),
             ),
+            const SizedBox(height: 14),
+            // 요일 헤더
+            Row(
+              children: ['월', '화', '수', '목', '금', '토', '일']
+                  .map((d) => Expanded(
+                        child: Center(
+                          child: Text(d,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurfaceVariant)),
+                        ),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 4),
+            // 도장 그리드
+            for (var w = 0; w < days.length ~/ 7; w++)
+              Row(
+                children: List.generate(7, (i) {
+                  final d = days[w * 7 + i];
+                  return Expanded(
+                      child: _DayCell(
+                    state: state,
+                    routine: routine,
+                    day: d,
+                    today: todayOnly,
+                  ));
+                }),
+              ),
           ],
         ),
       ),
     );
   }
+}
 
-  void _openDetail(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        clipBehavior: Clip.antiAlias,
+class _DayCell extends StatelessWidget {
+  final AppState state;
+  final Routine routine;
+  final DateTime day;
+  final DateTime today;
+  const _DayCell(
+      {required this.state,
+      required this.routine,
+      required this.day,
+      required this.today});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final inSeason =
+        !day.isBefore(routine.startDate) && !day.isAfter(routine.endDate);
+    final isDuty = routine.isDutyDay(day);
+    final certified = inSeason && state.isCertified(routine.id, day);
+    final isToday = day == today;
+    final isPast = day.isBefore(today);
+    final missed = inSeason && isDuty && isPast && !certified;
+
+    Certification? cert;
+    if (certified) {
+      final key = dateKeyOf(day);
+      for (final c in state.certsForRoutine(routine.id)) {
+        if (c.dateKey == key) {
+          cert = c;
+          break;
+        }
+      }
+    }
+
+    return AspectRatio(
+      aspectRatio: 1,
+      child: InkWell(
+        onTap: cert != null
+            ? () => showCertDetail(context, cert!, routine)
+            : null,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          margin: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: isToday
+                ? Border.all(color: cs.primary, width: 1.4)
+                : null,
+            color: !inSeason
+                ? Colors.transparent
+                : missed
+                    ? cs.errorContainer.withValues(alpha: 0.45)
+                    : Colors.transparent,
+          ),
+          alignment: Alignment.center,
+          child: certified
+              ? StampMark(size: 26, filledCheck: true)
+              : Text(
+                  inSeason ? '${day.day}' : '',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: !isDuty
+                        ? cs.outlineVariant
+                        : isPast || isToday
+                            ? cs.onSurfaceVariant
+                            : cs.outlineVariant,
+                    fontWeight:
+                        isToday ? FontWeight.w800 : FontWeight.w400,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 인증 상세 — 사진·검증 내용·메모·공유 (도장 달력/앨범 공용)
+void showCertDetail(
+    BuildContext context, Certification cert, Routine? routine) {
+  showDialog(
+    context: context,
+    builder: (_) => _CertDetailDialog(cert: cert, routine: routine),
+  );
+}
+
+class _CertDetailDialog extends StatefulWidget {
+  final Certification cert;
+  final Routine? routine;
+  const _CertDetailDialog({required this.cert, required this.routine});
+
+  @override
+  State<_CertDetailDialog> createState() => _CertDetailDialogState();
+}
+
+class _CertDetailDialogState extends State<_CertDetailDialog> {
+  final _player = AudioPlayer();
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playing = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  String _fmtDuration(int sec) {
+    final m = sec ~/ 60;
+    final s = sec % 60;
+    return m > 0 ? '$m분 $s초' : '$s초';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cert = widget.cert;
+    final routine = widget.routine;
+    final cs = Theme.of(context).colorScheme;
+    final method = cert.verifyMethod;
+
+    return Dialog(
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (File(cert.photoPath).existsSync())
+            if (cert.hasPhoto && File(cert.photoPath).existsSync())
               Image.file(File(cert.photoPath)),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(routine?.title ?? '(삭제된 루틴)',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(DateFormat('yyyy년 M월 d일 HH:mm 인증')
-                      .format(cert.timestamp)),
+                  Row(
+                    children: [
+                      const StampMark(size: 34, filledCheck: true),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(routine?.title ?? '(삭제된 루틴)',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium),
+                            Text(
+                              DateFormat('yyyy년 M월 d일 HH:mm 인증')
+                                  .format(cert.timestamp),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: cs.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // 검증 내용
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest
+                          .withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          switch (method) {
+                            'timer' => '⏱ 타이머 인증'
+                                '${cert.durationSec != null ? ' · ${_fmtDuration(cert.durationSec!)} 수행' : ''}',
+                            'audio' => '🎙 녹음 인증',
+                            _ => '📷 사진 인증 (날짜 워터마크)',
+                          },
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        if (method == 'audio' &&
+                            cert.audioPath != null &&
+                            File(cert.audioPath!).existsSync()) ...[
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              if (_playing) {
+                                await _player.stop();
+                                setState(() => _playing = false);
+                              } else {
+                                await _player.play(
+                                    DeviceFileSource(cert.audioPath!));
+                                setState(() => _playing = true);
+                              }
+                            },
+                            icon: Icon(
+                                _playing ? Icons.stop : Icons.play_arrow),
+                            label: Text(_playing ? '정지' : '녹음 듣기'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                   if (cert.progressValue != null &&
                       cert.progressValue!.isNotEmpty) ...[
                     const SizedBox(height: 8),
@@ -137,6 +446,66 @@ class _CertTile extends StatelessWidget {
                       icon: const Icon(Icons.ios_share, size: 18),
                       label: const Text('공유'),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CertTile extends StatelessWidget {
+  final Certification cert;
+  final Routine? routine;
+  const _CertTile({required this.cert, required this.routine});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final file = File(cert.photoPath);
+    final hasPhoto = cert.hasPhoto && file.existsSync();
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => showCertDetail(context, cert, routine),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: hasPhoto
+                  ? Image.file(file, fit: BoxFit.cover)
+                  : Container(
+                      color: cs.surfaceContainerHighest,
+                      child: Center(
+                        child: Icon(
+                          cert.verifyMethod == 'timer'
+                              ? Icons.timer_outlined
+                              : cert.verifyMethod == 'audio'
+                                  ? Icons.mic_rounded
+                                  : Icons.image_not_supported,
+                          size: 36,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(routine?.title ?? '(삭제된 루틴)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text(
+                    DateFormat('yyyy.MM.dd HH:mm').format(cert.timestamp),
+                    style: TextStyle(
+                        fontSize: 11, color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
