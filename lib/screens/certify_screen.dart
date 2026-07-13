@@ -181,6 +181,12 @@ class _CertifyScreenState extends State<CertifyScreen> {
       };
 
   Future<void> _submit() async {
+    if (!widget.routine.isWithinWindow(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              '이 루틴은 ${widget.routine.windowLabel} 사이에만 인증할 수 있어요')));
+      return;
+    }
     if (!_canSubmit) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(_blockReason)));
@@ -279,6 +285,44 @@ class _CertifyScreenState extends State<CertifyScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // 인증 시간대 안내 배너
+          if (r.hasWindow) ...[
+            Builder(builder: (context) {
+              final within = r.isWithinWindow(DateTime.now());
+              final cs = Theme.of(context).colorScheme;
+              return Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: within
+                      ? cs.primary.withValues(alpha: 0.08)
+                      : cs.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(within ? Icons.wb_twilight : Icons.lock_clock,
+                        size: 18,
+                        color: within ? cs.primary : cs.onErrorContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        within
+                            ? '지금 인증 가능! (${r.windowLabel})'
+                            : '이 루틴은 ${r.windowLabel} 사이에만 인증할 수 있어요',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color:
+                              within ? cs.primary : cs.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
           // ── 검증 방식별 메인 영역 ──
           if (_method == VerifyMethod.timer) ...[
             _TimerBox(

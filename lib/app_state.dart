@@ -59,6 +59,13 @@ class AppState extends ChangeNotifier {
       backupTitle: newBackup ?? r.backupTitle,
       targetValue: newTarget ?? r.targetValue,
       createdAt: r.createdAt,
+      verifyMethod: r.verifyMethod,
+      timerMinutes: r.timerMinutes,
+      requireNote: r.requireNote,
+      windowStartMin: r.windowStartMin,
+      windowEndMin: r.windowEndMin,
+      startDate: r.startDate,
+      endDate: r.endDate,
       changeUsedCount: r.changeUsedCount + 1,
     );
     routines = [...routines];
@@ -85,6 +92,9 @@ class AppState extends ChangeNotifier {
       createdAt: r.createdAt,
       verifyMethod: r.verifyMethod,
       timerMinutes: r.timerMinutes,
+      requireNote: r.requireNote,
+      windowStartMin: r.windowStartMin,
+      windowEndMin: r.windowEndMin,
       startDate: r.startDate,
       endDate: newEnd,
       changeUsedCount: r.changeUsedCount,

@@ -16,6 +16,9 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
   VerifyMethod _verify = VerifyMethod.photo;
   int _timerMinutes = 15;
   bool _requireNote = false;
+  bool _useWindow = false;
+  TimeOfDay _windowStart = const TimeOfDay(hour: 5, minute: 0);
+  TimeOfDay _windowEnd = const TimeOfDay(hour: 8, minute: 0);
   late DateTime _endDate; // 완료 목표일 (기본 63일)
 
   final _title = TextEditingController();
@@ -65,6 +68,10 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
       verifyMethod: _verify,
       timerMinutes: _timerMinutes,
       requireNote: _requireNote,
+      windowStartMin:
+          _useWindow ? _windowStart.hour * 60 + _windowStart.minute : null,
+      windowEndMin:
+          _useWindow ? _windowEnd.hour * 60 + _windowEnd.minute : null,
       endDate: _endDate,
     );
     await widget.state.addRoutine(r);
@@ -235,6 +242,66 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
             title: const Text('소감/느낀점 필수 작성'),
             subtitle: const Text('인증할 때 오늘의 느낌을 꼭 적게 합니다 (명상·독서 추천)'),
           ),
+          // 인증 시간대 제한 — 일찍 일어나기 등 (마감 알림도 이 시각 기준으로 변경)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _useWindow,
+            onChanged: (v) => setState(() => _useWindow = v),
+            title: const Text('인증 시간대 제한'),
+            subtitle: const Text('정해진 시간에만 도장 가능 (일찍 일어나기 추천)'),
+          ),
+          if (_useWindow) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final t = await showTimePicker(
+                          context: context, initialTime: _windowStart);
+                      if (t != null) setState(() => _windowStart = t);
+                    },
+                    icon: const Icon(Icons.schedule, size: 18),
+                    label: Text(
+                        '시작 ${_windowStart.hour.toString().padLeft(2, '0')}:${_windowStart.minute.toString().padLeft(2, '0')}'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final t = await showTimePicker(
+                          context: context, initialTime: _windowEnd);
+                      if (t != null) setState(() => _windowEnd = t);
+                    },
+                    icon: const Icon(Icons.timer_off_outlined, size: 18),
+                    label: Text(
+                        '마감 ${_windowEnd.hour.toString().padLeft(2, '0')}:${_windowEnd.minute.toString().padLeft(2, '0')}'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              children: [
+                ('기상 05~08시', 5, 0, 8, 0),
+                ('아침 06~09시', 6, 0, 9, 0),
+                ('저녁 20~23시', 20, 0, 23, 0),
+              ].map((p) {
+                return ActionChip(
+                  label: Text(p.$1, style: const TextStyle(fontSize: 12)),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => setState(() {
+                    _windowStart = TimeOfDay(hour: p.$2, minute: p.$3);
+                    _windowEnd = TimeOfDay(hour: p.$4, minute: p.$5);
+                  }),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 4),
+            Text('마감 전 알림(3시간·1시간·30분 전)도 이 마감 시각 기준으로 울립니다.',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
           const SizedBox(height: 8),
           // ── 완료 목표일 — 기본 63일 (습관이 몸에 붙는 9주) ──
           Text('완료 목표일', style: Theme.of(context).textTheme.titleMedium),

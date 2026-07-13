@@ -230,6 +230,22 @@ class _RoutineCard extends StatelessWidget {
                       children: [
                         _TypeBadge(type: routine.type),
                         const SizedBox(width: 6),
+                        if (routine.hasWindow) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3E6),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text('🌅 ${routine.windowLabel}',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFB05E00))),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
                         _DeadlineChip(
                           certified: certified,
                           remaining: remaining,

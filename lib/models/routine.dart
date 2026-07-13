@@ -69,6 +69,8 @@ class Routine {
   final VerifyMethod verifyMethod;
   final int timerMinutes; // 타이머 인증 목표(분)
   final bool requireNote; // 소감/느낀점 필수 작성
+  final int? windowStartMin; // 인증 가능 시작 시각 (자정 기준 분, 예: 300 = 05:00)
+  final int? windowEndMin; // 인증 마감 시각 — 설정 시 이 시각이 그날의 마감이 된다
   final DateTime startDate; // 시즌 시작일 (날짜만)
   final DateTime endDate; // 완료 목표일 (기본: 시작 +62일 = 63일간)
   int changeUsedCount; // 루틴 변경 찬스 사용 횟수 (0 또는 1)
@@ -85,6 +87,8 @@ class Routine {
     this.verifyMethod = VerifyMethod.photo,
     this.timerMinutes = 15,
     this.requireNote = false,
+    this.windowStartMin,
+    this.windowEndMin,
     DateTime? startDate,
     DateTime? endDate,
     this.changeUsedCount = 0,
@@ -121,9 +125,28 @@ class Routine {
     return n;
   }
 
-  /// 해당 날짜의 마감 시각 (그날 23:59:00)
-  DateTime deadlineOf(DateTime date) =>
-      DateTime(date.year, date.month, date.day, 23, 59, 0);
+  /// 인증 시간대 제한 여부 (일찍 일어나기 등)
+  bool get hasWindow => windowStartMin != null && windowEndMin != null;
+
+  /// 지금이 인증 가능 시간대인지
+  bool isWithinWindow(DateTime t) {
+    if (!hasWindow) return true;
+    final min = t.hour * 60 + t.minute;
+    return min >= windowStartMin! && min <= windowEndMin!;
+  }
+
+  static String _fmtMin(int m) =>
+      '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
+
+  /// "05:00~08:00" 형식 라벨
+  String get windowLabel =>
+      hasWindow ? '${_fmtMin(windowStartMin!)}~${_fmtMin(windowEndMin!)}' : '';
+
+  /// 해당 날짜의 마감 시각 — 시간대 제한이 있으면 그 마감, 없으면 23:59
+  DateTime deadlineOf(DateTime date) => hasWindow
+      ? DateTime(date.year, date.month, date.day, windowEndMin! ~/ 60,
+          windowEndMin! % 60)
+      : DateTime(date.year, date.month, date.day, 23, 59, 0);
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -137,6 +160,8 @@ class Routine {
         'verifyMethod': verifyMethod.name,
         'timerMinutes': timerMinutes,
         'requireNote': requireNote,
+        'windowStartMin': windowStartMin,
+        'windowEndMin': windowEndMin,
         'startDate': startDate.toIso8601String(),
         'endDate': endDate.toIso8601String(),
         'changeUsedCount': changeUsedCount,
@@ -156,6 +181,8 @@ class Routine {
             : VerifyMethod.photo,
         timerMinutes: (j['timerMinutes'] as num?)?.toInt() ?? 15,
         requireNote: j['requireNote'] as bool? ?? false,
+        windowStartMin: (j['windowStartMin'] as num?)?.toInt(),
+        windowEndMin: (j['windowEndMin'] as num?)?.toInt(),
         startDate: j['startDate'] != null
             ? DateTime.parse(j['startDate'] as String)
             : null,
