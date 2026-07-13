@@ -66,6 +66,34 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  /// 완료 목표일 변경 (최소: 시작일+29일 = 30일 시즌)
+  Future<bool> updateEndDate(String routineId, DateTime newEnd) async {
+    final idx = routines.indexWhere((r) => r.id == routineId);
+    if (idx < 0) return false;
+    final r = routines[idx];
+    final minEnd = r.startDate.add(const Duration(days: 29));
+    if (newEnd.isBefore(minEnd)) return false;
+
+    routines[idx] = Routine(
+      id: r.id,
+      type: r.type,
+      title: r.title,
+      reason: r.reason,
+      dutyCycle: r.dutyCycle,
+      backupTitle: r.backupTitle,
+      targetValue: r.targetValue,
+      createdAt: r.createdAt,
+      verifyMethod: r.verifyMethod,
+      timerMinutes: r.timerMinutes,
+      startDate: r.startDate,
+      endDate: newEnd,
+      changeUsedCount: r.changeUsedCount,
+    );
+    routines = [...routines];
+    await _persistAndSync();
+    return true;
+  }
+
   // ---- 인증 ----
 
   Future<void> addCertification(Certification c) async {

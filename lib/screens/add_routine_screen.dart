@@ -28,8 +28,9 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
   void initState() {
     super.initState();
     final now = DateTime.now();
+    // 기간은 본인이 설정 — 최소 30일(한 달), 초기 제안값 30일
     _endDate = DateTime(now.year, now.month, now.day)
-        .add(const Duration(days: 62)); // 오늘 포함 63일
+        .add(const Duration(days: 29));
   }
 
   @override
@@ -227,40 +228,52 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
           // ── 완료 목표일 — 기본 63일 (습관이 몸에 붙는 9주) ──
           Text('완료 목표일', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          Row(
+          OutlinedButton.icon(
+            onPressed: () async {
+              final now = DateTime.now();
+              final today = DateTime(now.year, now.month, now.day);
+              final minEnd = today.add(const Duration(days: 29)); // 최소 30일
+              final picked = await showDatePicker(
+                context: context,
+                initialDate:
+                    _endDate.isBefore(minEnd) ? minEnd : _endDate,
+                firstDate: minEnd,
+                lastDate: today.add(const Duration(days: 730)),
+                helpText: '완료 목표일 선택 (최소 30일)',
+              );
+              if (picked != null) setState(() => _endDate = picked);
+            },
+            icon: const Icon(Icons.event),
+            label: Text(
+                '${_endDate.year}.${_endDate.month.toString().padLeft(2, '0')}.${_endDate.day.toString().padLeft(2, '0')}'
+                ' (${_endDate.difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays + 1}일간)'),
+            style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44)),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final now = DateTime.now();
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _endDate,
-                      firstDate: now,
-                      lastDate: now.add(const Duration(days: 365)),
-                    );
-                    if (picked != null) setState(() => _endDate = picked);
-                  },
-                  icon: const Icon(Icons.event),
-                  label: Text(
-                      '${_endDate.year}.${_endDate.month.toString().padLeft(2, '0')}.${_endDate.day.toString().padLeft(2, '0')}'
-                      ' (${_endDate.difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays + 1}일간)'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ActionChip(
-                label: const Text('63일'),
-                onPressed: () {
-                  final now = DateTime.now();
-                  setState(() => _endDate =
-                      DateTime(now.year, now.month, now.day)
-                          .add(const Duration(days: 62)));
-                },
-              ),
-            ],
+              (30, '30일'),
+              (63, '63일'),
+              (100, '100일'),
+              (365, '1년'),
+              (730, '2년'),
+            ].map((preset) {
+              final now = DateTime.now();
+              final target = DateTime(now.year, now.month, now.day)
+                  .add(Duration(days: preset.$1 - 1));
+              final selected = _endDate == target;
+              return ChoiceChip(
+                label: Text(preset.$2),
+                selected: selected,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => setState(() => _endDate = target),
+              );
+            }).toList(),
           ),
           const SizedBox(height: 4),
-          Text('습관이 몸에 붙는 데 평균 66일 — KeepUp 기본 시즌은 63일(9주)입니다.',
+          Text('기간은 내가 정합니다 (최소 30일). 1년, 2년 쌓일 때 진짜 습관이 됩니다.',
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 16),
           TextField(

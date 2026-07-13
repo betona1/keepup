@@ -292,6 +292,31 @@ class _RoutineCard extends StatelessWidget {
             ),
             const Divider(height: 1),
             ListTile(
+              leading: const Icon(Icons.event_repeat),
+              title: const Text('완료 목표일 변경'),
+              subtitle: Text(
+                  '현재: ${routine.endDate.year}.${routine.endDate.month.toString().padLeft(2, '0')}.${routine.endDate.day.toString().padLeft(2, '0')}'),
+              onTap: () async {
+                Navigator.pop(context);
+                final minEnd =
+                    routine.startDate.add(const Duration(days: 29));
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: routine.endDate.isBefore(minEnd)
+                      ? minEnd
+                      : routine.endDate,
+                  firstDate: minEnd,
+                  lastDate:
+                      routine.startDate.add(const Duration(days: 1460)),
+                  helpText: '완료 목표일 변경 (최소 30일 시즌)',
+                );
+                if (picked != null) {
+                  await state.updateEndDate(routine.id, picked);
+                }
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
               leading: const Icon(Icons.delete_outline),
               title: const Text('루틴 삭제'),
               onTap: () async {
