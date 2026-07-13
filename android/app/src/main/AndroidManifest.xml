@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- 녹음 인증 (발음 연습) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- 걸음수 자동 검증 (Health Connect) -->
+    <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <application
         android:label="KeepUp"
         android:name="${applicationName}"
@@ -32,7 +34,22 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Health Connect 권한 사용 근거 화면 (필수) -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
+            </intent-filter>
         </activity>
+        <!-- Health Connect 권한 사용처 표시 (Android 14+) -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE"/>
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS"/>
+            </intent-filter>
+        </activity-alias>
         <!-- 예약 알림 유지: 기기 재부팅·앱 업데이트 후에도 알림 스케줄 복원 -->
         <receiver android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />

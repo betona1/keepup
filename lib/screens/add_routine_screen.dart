@@ -15,6 +15,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
   DutyCycle _accumCycle = DutyCycle.everyday;
   VerifyMethod _verify = VerifyMethod.photo;
   int _timerMinutes = 15;
+  int _targetSteps = 6000;
   bool _requireNote = false;
   bool _useWindow = false;
   TimeOfDay _windowStart = const TimeOfDay(hour: 5, minute: 0);
@@ -67,6 +68,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
       createdAt: DateTime.now(),
       verifyMethod: _verify,
       timerMinutes: _timerMinutes,
+      targetSteps: _targetSteps,
       requireNote: _requireNote,
       windowStartMin:
           _useWindow ? _windowStart.hour * 60 + _windowStart.minute : null,
@@ -233,6 +235,24 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
               ],
             ),
           ],
+          if (_verify == VerifyMethod.steps) ...[
+            const SizedBox(height: 4),
+            Text('목표 걸음수',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              children: [5000, 6000, 8000, 10000].map((s) => ChoiceChip(
+                    label: Text('${s ~/ 1000}천보'),
+                    selected: _targetSteps == s,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => setState(() => _targetSteps = s),
+                  )).toList(),
+            ),
+            const SizedBox(height: 4),
+            Text('삼성헬스·구글 피트니스가 기록한 걸음수를 헬스커넥트로 읽어 자동 확인합니다.',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
           const SizedBox(height: 8),
           // 소감 필수 — 명상 등 내면 기록이 중요한 습관용
           SwitchListTile(
@@ -389,6 +409,7 @@ class _VerifyCard extends StatelessWidget {
         VerifyMethod.timer => Icons.timer_outlined,
         VerifyMethod.audio => Icons.mic_none_rounded,
         VerifyMethod.video => Icons.videocam_outlined,
+        VerifyMethod.steps => Icons.directions_walk_rounded,
       };
 
   @override

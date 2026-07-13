@@ -19,6 +19,7 @@ enum VerifyMethod {
   timer, // 앱 내 타이머 (n분 이상 측정)
   audio, // 녹음 (발음 연습 등)
   video, // 동영상 (명상·운동 장면)
+  steps, // 걸음수 자동 검증 (Health Connect)
 }
 
 extension RoutineTypeLabel on RoutineType {
@@ -42,6 +43,7 @@ extension VerifyMethodLabel on VerifyMethod {
         VerifyMethod.timer => '타이머 인증',
         VerifyMethod.audio => '녹음 인증',
         VerifyMethod.video => '동영상 인증',
+        VerifyMethod.steps => '걸음수 인증',
       };
 
   String get description => switch (this) {
@@ -49,6 +51,7 @@ extension VerifyMethodLabel on VerifyMethod {
         VerifyMethod.timer => '앱 타이머로 목표 시간 측정 (독서·명상·공부)',
         VerifyMethod.audio => '음성 녹음으로 남기기 (발음 연습·낭독)',
         VerifyMethod.video => '짧은 영상으로 남기기 (명상·운동 장면)',
+        VerifyMethod.steps => '오늘 걸음수를 자동으로 확인 (삼성헬스·헬스커넥트)',
       };
 }
 
@@ -68,6 +71,7 @@ class Routine {
   final DateTime createdAt;
   final VerifyMethod verifyMethod;
   final int timerMinutes; // 타이머 인증 목표(분)
+  final int targetSteps; // 걸음수 인증 목표(보)
   final bool requireNote; // 소감/느낀점 필수 작성
   final int? windowStartMin; // 인증 가능 시작 시각 (자정 기준 분, 예: 300 = 05:00)
   final int? windowEndMin; // 인증 마감 시각 — 설정 시 이 시각이 그날의 마감이 된다
@@ -86,6 +90,7 @@ class Routine {
     required this.createdAt,
     this.verifyMethod = VerifyMethod.photo,
     this.timerMinutes = 15,
+    this.targetSteps = 6000,
     this.requireNote = false,
     this.windowStartMin,
     this.windowEndMin,
@@ -159,6 +164,7 @@ class Routine {
         'createdAt': createdAt.toIso8601String(),
         'verifyMethod': verifyMethod.name,
         'timerMinutes': timerMinutes,
+        'targetSteps': targetSteps,
         'requireNote': requireNote,
         'windowStartMin': windowStartMin,
         'windowEndMin': windowEndMin,
@@ -180,6 +186,7 @@ class Routine {
             ? VerifyMethod.values.byName(j['verifyMethod'] as String)
             : VerifyMethod.photo,
         timerMinutes: (j['timerMinutes'] as num?)?.toInt() ?? 15,
+        targetSteps: (j['targetSteps'] as num?)?.toInt() ?? 6000,
         requireNote: j['requireNote'] as bool? ?? false,
         windowStartMin: (j['windowStartMin'] as num?)?.toInt(),
         windowEndMin: (j['windowEndMin'] as num?)?.toInt(),
@@ -207,6 +214,7 @@ class Certification {
   final int? durationSec; // 타이머 인증: 측정 시간(초)
   final String? audioPath; // 녹음 인증: 음성 파일 경로
   final String? videoPath; // 동영상 인증: 영상 파일 경로
+  final int? steps; // 걸음수 인증: 확인된 오늘 걸음수
 
   Certification({
     required this.id,
@@ -221,6 +229,7 @@ class Certification {
     this.durationSec,
     this.audioPath,
     this.videoPath,
+    this.steps,
   });
 
   bool get hasPhoto => photoPath.isNotEmpty;
@@ -238,6 +247,7 @@ class Certification {
         'durationSec': durationSec,
         'audioPath': audioPath,
         'videoPath': videoPath,
+        'steps': steps,
       };
 
   factory Certification.fromJson(Map<String, dynamic> j) => Certification(
@@ -253,5 +263,6 @@ class Certification {
         durationSec: (j['durationSec'] as num?)?.toInt(),
         audioPath: j['audioPath'] as String?,
         videoPath: j['videoPath'] as String?,
+        steps: (j['steps'] as num?)?.toInt(),
       );
 }

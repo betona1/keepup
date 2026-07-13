@@ -21,7 +21,7 @@ android {
         applicationId = "com.keywordream.keepup"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 26 // health(Health Connect) 최소 요구 — Android 8.0+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

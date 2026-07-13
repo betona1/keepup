@@ -10,6 +10,7 @@ import '../app_state.dart';
 import '../models/routine.dart';
 import '../services/watermark_service.dart';
 import '../services/share_service.dart';
+import '../services/steps_service.dart';
 import '../theme.dart';
 
 class CertifyScreen extends StatefulWidget {
@@ -52,6 +53,30 @@ class _CertifyScreenState extends State<CertifyScreen> {
   // 동영상 인증
   String? _videoPath;
   VideoPlayerController? _videoCtrl;
+
+  // 걸음수 인증
+  int? _todaySteps;
+  bool _stepsLoading = false;
+  bool _stepsDenied = false;
+  bool get _stepsDone =>
+      _todaySteps != null && _todaySteps! >= widget.routine.targetSteps;
+
+  Future<void> _loadSteps() async {
+    setState(() {
+      _stepsLoading = true;
+      _stepsDenied = false;
+    });
+    final steps = await StepsService.instance.todaySteps();
+    if (!mounted) return;
+    setState(() {
+      _stepsLoading = false;
+      if (steps == null) {
+        _stepsDenied = true;
+      } else {
+        _todaySteps = steps;
+      }
+    });
+  }
 
   VerifyMethod get _method => widget.routine.verifyMethod;
 
@@ -170,6 +195,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
         VerifyMethod.timer => _timerDone,
         VerifyMethod.audio => _audioPath != null && !_recording,
         VerifyMethod.video => _videoPath != null,
+        VerifyMethod.steps => _stepsDone,
       };
 
   String get _blockReason => switch (_method) {
@@ -178,6 +204,8 @@ class _CertifyScreenState extends State<CertifyScreen> {
           '타이머로 ${widget.routine.timerMinutes}분을 채우면 인증할 수 있어요',
         VerifyMethod.audio => '녹음을 완료하면 인증할 수 있어요',
         VerifyMethod.video => '인증 동영상을 먼저 촬영/선택해 주세요',
+        VerifyMethod.steps =>
+          '목표 ${widget.routine.targetSteps}보를 채우고 걸음수를 불러와 주세요',
       };
 
   Future<void> _submit() async {
@@ -222,6 +250,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
       durationSec: _method == VerifyMethod.timer ? _elapsedSec : null,
       audioPath: _method == VerifyMethod.audio ? _audioPath : null,
       videoPath: _method == VerifyMethod.video ? _videoPath : null,
+      steps: _method == VerifyMethod.steps ? _todaySteps : null,
     );
     await widget.state.addCertification(cert);
 
@@ -345,6 +374,20 @@ class _CertifyScreenState extends State<CertifyScreen> {
               playing: _playing,
               onToggleRecord: _toggleRecord,
               onTogglePlay: _togglePlay,
+            ),
+            const SizedBox(height: 16),
+            Text('인증 사진 (선택)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+          ],
+          if (_method == VerifyMethod.steps) ...[
+            _StepsBox(
+              steps: _todaySteps,
+              target: widget.routine.targetSteps,
+              loading: _stepsLoading,
+              denied: _stepsDenied,
+              done: _stepsDone,
+              onLoad: _loadSteps,
             ),
             const SizedBox(height: 16),
             Text('인증 사진 (선택)',
@@ -534,6 +577,107 @@ class _TimerBox extends StatelessWidget {
                 if (elapsedSec > 0 && !running)
                   OutlinedButton(onPressed: onReset, child: const Text('리셋')),
               ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 걸음수 인증 박스 — Health Connect에서 오늘 걸음수를 읽어 목표 대비 확인
+class _StepsBox extends StatelessWidget {
+  final int? steps;
+  final int target;
+  final bool loading;
+  final bool denied;
+  final bool done;
+  final VoidCallback onLoad;
+  const _StepsBox({
+    required this.steps,
+    required this.target,
+    required this.loading,
+    required this.denied,
+    required this.done,
+    required this.onLoad,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final progress =
+        steps == null ? 0.0 : (steps! / target).clamp(0.0, 1.0);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: done ? AppTheme.stamp : cs.outlineVariant,
+            width: done ? 1.6 : 1),
+      ),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 150,
+                height: 150,
+                child: CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 10,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  color: done ? AppTheme.stamp : cs.primary,
+                  strokeCap: StrokeCap.round,
+                ),
+              ),
+              Column(
+                children: [
+                  Icon(Icons.directions_walk_rounded,
+                      size: 26,
+                      color: done ? AppTheme.stamp : cs.primary),
+                  Text(
+                    steps == null ? '--' : '$steps',
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      color: done ? AppTheme.stamp : cs.onSurface,
+                    ),
+                  ),
+                  Text('목표 $target보',
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (done)
+            const Text('목표 달성! 이제 도장을 찍을 수 있어요 🎉',
+                style: TextStyle(
+                    color: AppTheme.stamp, fontWeight: FontWeight.w700)),
+          if (denied)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '헬스커넥트 권한이 필요해요. 삼성헬스가 걸음수를 기록 중인지도 확인해 주세요.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: cs.error),
+              ),
+            ),
+          if (!done)
+            FilledButton.icon(
+              onPressed: loading ? null : onLoad,
+              icon: loading
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.sync),
+              label: Text(loading
+                  ? '불러오는 중...'
+                  : steps == null
+                      ? '오늘 걸음수 불러오기'
+                      : '걸음수 새로고침'),
             ),
         ],
       ),

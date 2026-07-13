@@ -427,6 +427,8 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                                 '${cert.durationSec != null ? ' · ${_fmtDuration(cert.durationSec!)} 수행' : ''}',
                             'audio' => '🎙 녹음 인증',
                             'video' => '🎬 동영상 인증',
+                            'steps' =>
+                              '👟 걸음수 인증${cert.steps != null ? ' · ${cert.steps}보 확인' : ''}',
                             _ => '📷 사진 인증 (날짜 워터마크)',
                           },
                           style:
@@ -519,7 +521,9 @@ class _CertTile extends StatelessWidget {
                                   ? Icons.mic_rounded
                                   : cert.verifyMethod == 'video'
                                       ? Icons.videocam_rounded
-                                      : Icons.image_not_supported,
+                                      : cert.verifyMethod == 'steps'
+                                          ? Icons.directions_walk_rounded
+                                          : Icons.image_not_supported,
                           size: 36,
                           color: cs.onSurfaceVariant,
                         ),

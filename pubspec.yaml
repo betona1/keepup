@@ -28,7 +28,7 @@ dependencies:
   intl: ^0.20.3
 
   # OS 공유 시트 (카톡 등으로 인증 공유)
-  share_plus: ^13.2.0
+  share_plus: ^12.0.2
 
   # 오늘의 명언 원격 갱신 (keepup.keywordream.com/api/quotes, 실패 시 내장 JSON 사용)
   http: ^1.2.2
@@ -39,6 +39,9 @@ dependencies:
 
   # 동영상 인증 (명상·운동) 재생
   video_player: ^2.9.2
+
+  # 걸음수 자동 검증 (Health Connect / HealthKit)
+  health: ^13.3.1
 
 dev_dependencies:
   flutter_lints: ^6.0.0
