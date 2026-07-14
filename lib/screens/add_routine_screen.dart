@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
@@ -28,6 +29,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
   final _reason = TextEditingController();
   final _backup = TextEditingController();
   final _target = TextEditingController();
+  final _mediaUrl = TextEditingController(); // 명상 미디어 (파일 경로/URL)
 
   String? _titleError;
 
@@ -46,6 +48,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
     _reason.dispose();
     _backup.dispose();
     _target.dispose();
+    _mediaUrl.dispose();
     super.dispose();
   }
 
@@ -72,6 +75,8 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
       verifyMethod: _verify,
       timerMinutes: _timerMinutes,
       targetSteps: _targetSteps,
+      mediaSource:
+          _mediaUrl.text.trim().isEmpty ? null : _mediaUrl.text.trim(),
       requireNote: _requireNote,
       windowStartMin:
           _useWindow ? _windowStart.hour * 60 + _windowStart.minute : null,
@@ -282,6 +287,42 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
                     )),
               ],
             ),
+            const SizedBox(height: 12),
+            // 명상 모드 배경 미디어 — 내 음악 파일 / 오디오 URL / 유튜브 URL
+            Text('명상 음악·영상 (선택)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _mediaUrl,
+              decoration: InputDecoration(
+                hintText: '유튜브 주소, 음악 스트리밍 URL 붙여넣기',
+                hintStyle: const TextStyle(fontSize: 13),
+                suffixIcon: _mediaUrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () =>
+                            setState(() => _mediaUrl.clear()),
+                      )
+                    : null,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final res = await FilePicker.platform
+                    .pickFiles(type: FileType.audio);
+                final path = res?.files.single.path;
+                if (path != null) {
+                  setState(() => _mediaUrl.text = path);
+                }
+              },
+              icon: const Icon(Icons.library_music_outlined, size: 18),
+              label: const Text('내 폰의 음악 파일 선택'),
+            ),
+            const SizedBox(height: 4),
+            Text('타이머가 도는 동안 재생됩니다. 음악·URL은 앱 안에서, 유튜브는 유튜브로 열려요.',
+                style: Theme.of(context).textTheme.bodySmall),
           ],
           if (_verify == VerifyMethod.steps) ...[
             const SizedBox(height: 4),

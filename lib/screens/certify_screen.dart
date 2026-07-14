@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
@@ -36,12 +37,25 @@ class _CertifyScreenState extends State<CertifyScreen> {
   bool _isBackup = false;
   bool _saving = false;
 
-  // 타이머 인증
+  // 타이머 인증 (+ 명상 모드 배경 음악)
   Timer? _ticker;
   int _elapsedSec = 0;
   bool _running = false;
+  final _bgm = AudioPlayer()..setReleaseMode(ReleaseMode.loop);
   bool get _timerDone =>
       _elapsedSec >= widget.routine.timerMinutes * 60;
+
+  Future<void> _bgmPlay() async {
+    final src = widget.routine.mediaSource;
+    if (src == null || widget.routine.mediaIsYoutube) return;
+    try {
+      if (widget.routine.mediaIsUrl) {
+        await _bgm.play(UrlSource(src));
+      } else if (File(src).existsSync()) {
+        await _bgm.play(DeviceFileSource(src));
+      }
+    } catch (_) {/* 미디어 재생 실패는 조용히 무시 (타이머는 계속) */}
+  }
 
   // 녹음 인증
   final _recorder = AudioRecorder();
@@ -93,6 +107,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
     _memo.dispose();
     _progress.dispose();
     _ticker?.cancel();
+    _bgm.dispose();
     _recorder.dispose();
     _player.dispose();
     _videoCtrl?.dispose();
@@ -133,17 +148,27 @@ class _CertifyScreenState extends State<CertifyScreen> {
   void _toggleTimer() {
     if (_running) {
       _ticker?.cancel();
+      _bgm.pause();
       setState(() => _running = false);
     } else {
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-        setState(() => _elapsedSec++);
+        setState(() {
+          _elapsedSec++;
+          if (_timerDone && _running) {
+            _ticker?.cancel();
+            _running = false;
+            _bgm.stop();
+          }
+        });
       });
+      _bgmPlay();
       setState(() => _running = true);
     }
   }
 
   void _resetTimer() {
     _ticker?.cancel();
+    _bgm.stop();
     setState(() {
       _running = false;
       _elapsedSec = 0;
@@ -361,6 +386,8 @@ class _CertifyScreenState extends State<CertifyScreen> {
               done: _timerDone,
               onToggle: _toggleTimer,
               onReset: _resetTimer,
+              mediaSource: r.mediaSource,
+              mediaIsYoutube: r.mediaIsYoutube,
             ),
             const SizedBox(height: 16),
             Text('인증 사진 (선택)',
@@ -495,14 +522,16 @@ class _CertifyScreenState extends State<CertifyScreen> {
   }
 }
 
-/// 타이머 인증 박스 — 목표 시간을 채우면 인증 가능
-class _TimerBox extends StatelessWidget {
+/// 타이머 인증 박스 — 명상 모드: 호흡 가이드 애니메이션 + 배경 음악/유튜브
+class _TimerBox extends StatefulWidget {
   final int elapsedSec;
   final int targetMin;
   final bool running;
   final bool done;
   final VoidCallback onToggle;
   final VoidCallback onReset;
+  final String? mediaSource;
+  final bool mediaIsYoutube;
   const _TimerBox({
     required this.elapsedSec,
     required this.targetMin,
@@ -510,7 +539,41 @@ class _TimerBox extends StatelessWidget {
     required this.done,
     required this.onToggle,
     required this.onReset,
+    this.mediaSource,
+    this.mediaIsYoutube = false,
   });
+
+  @override
+  State<_TimerBox> createState() => _TimerBoxState();
+}
+
+class _TimerBoxState extends State<_TimerBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _breath; // 4초 들숨 + 4초 날숨
+
+  @override
+  void initState() {
+    super.initState();
+    _breath = AnimationController(
+        vsync: this, duration: const Duration(seconds: 4));
+    if (widget.running) _breath.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(_TimerBox old) {
+    super.didUpdateWidget(old);
+    if (widget.running && !_breath.isAnimating) {
+      _breath.repeat(reverse: true);
+    } else if (!widget.running && _breath.isAnimating) {
+      _breath.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
 
   String _fmt(int sec) =>
       '${(sec ~/ 60).toString().padLeft(2, '0')}:${(sec % 60).toString().padLeft(2, '0')}';
@@ -518,64 +581,125 @@ class _TimerBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final progress = (elapsedSec / (targetMin * 60)).clamp(0.0, 1.0);
+    final progress =
+        (widget.elapsedSec / (widget.targetMin * 60)).clamp(0.0, 1.0);
+    final hasMedia = widget.mediaSource != null;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-            color: done ? AppTheme.stamp : cs.outlineVariant,
-            width: done ? 1.6 : 1),
+            color: widget.done ? AppTheme.stamp : cs.outlineVariant,
+            width: widget.done ? 1.6 : 1),
       ),
       child: Column(
         children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 150,
-                height: 150,
-                child: CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 10,
-                  backgroundColor: cs.surfaceContainerHighest,
-                  color: done ? AppTheme.stamp : cs.primary,
-                  strokeCap: StrokeCap.round,
+          AnimatedBuilder(
+            animation: _breath,
+            builder: (context, _) {
+              final t = Curves.easeInOut.transform(_breath.value);
+              final scale = 0.9 + t * 0.28; // 숨쉬는 원
+              return SizedBox(
+                width: 190,
+                height: 190,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // 호흡 가이드 원 (명상 모드)
+                    Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width: 160,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: cs.primary.withValues(
+                              alpha: widget.running ? 0.10 : 0.05),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 150,
+                      height: 150,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 10,
+                        backgroundColor: cs.surfaceContainerHighest,
+                        color: widget.done ? AppTheme.stamp : cs.primary,
+                        strokeCap: StrokeCap.round,
+                      ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_fmt(widget.elapsedSec),
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w800,
+                              color: widget.done
+                                  ? AppTheme.stamp
+                                  : cs.onSurface,
+                            )),
+                        Text(
+                          widget.running
+                              ? (_breath.status == AnimationStatus.forward
+                                  ? '들이쉬고…'
+                                  : '내쉬고…')
+                              : '목표 ${widget.targetMin}분',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: widget.running
+                                  ? cs.primary
+                                  : cs.onSurfaceVariant,
+                              fontWeight: widget.running
+                                  ? FontWeight.w700
+                                  : FontWeight.w400),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              Column(
-                children: [
-                  Text(_fmt(elapsedSec),
-                      style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w800,
-                        color: done ? AppTheme.stamp : cs.onSurface,
-                      )),
-                  Text('목표 $targetMin분',
-                      style: TextStyle(
-                          fontSize: 12, color: cs.onSurfaceVariant)),
-                ],
-              ),
-            ],
+              );
+            },
           ),
-          const SizedBox(height: 16),
-          if (done)
+          const SizedBox(height: 12),
+          // 배경 미디어 안내/컨트롤
+          if (hasMedia && widget.mediaIsYoutube)
+            OutlinedButton.icon(
+              onPressed: () => launchUrl(
+                Uri.parse(widget.mediaSource!),
+                mode: LaunchMode.externalApplication,
+              ),
+              icon: const Icon(Icons.play_circle_outline, size: 18),
+              label: const Text('유튜브 열고 명상 시작'),
+            ),
+          if (hasMedia && !widget.mediaIsYoutube)
+            Text(
+              widget.running ? '🎵 배경 음악 재생 중' : '🎵 시작하면 음악이 함께 재생돼요',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          if (hasMedia) const SizedBox(height: 10),
+          if (widget.done)
             const Text('목표 달성! 이제 도장을 찍을 수 있어요 🎉',
                 style: TextStyle(
                     color: AppTheme.stamp, fontWeight: FontWeight.w700)),
-          if (!done)
+          if (!widget.done)
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 FilledButton.icon(
-                  onPressed: onToggle,
-                  icon: Icon(running ? Icons.pause : Icons.play_arrow),
-                  label: Text(running ? '일시정지' : (elapsedSec > 0 ? '계속' : '시작')),
+                  onPressed: widget.onToggle,
+                  icon: Icon(
+                      widget.running ? Icons.pause : Icons.play_arrow),
+                  label: Text(widget.running
+                      ? '일시정지'
+                      : (widget.elapsedSec > 0 ? '계속' : '시작')),
                 ),
                 const SizedBox(width: 10),
-                if (elapsedSec > 0 && !running)
-                  OutlinedButton(onPressed: onReset, child: const Text('리셋')),
+                if (widget.elapsedSec > 0 && !widget.running)
+                  OutlinedButton(
+                      onPressed: widget.onReset, child: const Text('리셋')),
               ],
             ),
         ],

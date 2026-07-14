@@ -82,6 +82,7 @@ class Routine {
   final int timerMinutes; // 타이머 인증 목표(분)
   final int targetSteps; // 걸음수 인증 목표(보)
   final int dueWeekday; // weekly 주기의 마감 요일 (1=월 ... 7=일)
+  final String? mediaSource; // 명상 모드 배경 미디어 (로컬 파일 경로 / 오디오 URL / 유튜브 URL)
   final bool requireNote; // 소감/느낀점 필수 작성
   final int? windowStartMin; // 인증 가능 시작 시각 (자정 기준 분, 예: 300 = 05:00)
   final int? windowEndMin; // 인증 마감 시각 — 설정 시 이 시각이 그날의 마감이 된다
@@ -102,6 +103,7 @@ class Routine {
     this.timerMinutes = 15,
     this.targetSteps = 6000,
     this.dueWeekday = 7,
+    this.mediaSource,
     this.requireNote = false,
     this.windowStartMin,
     this.windowEndMin,
@@ -114,6 +116,20 @@ class Routine {
 
   /// 이 루틴이 결과형 주기인지 (기간 내 자유 인증)
   bool get isResultCycle => resultCycles.contains(dutyCycle);
+
+  /// 명상 미디어가 유튜브 링크인지
+  bool get mediaIsYoutube {
+    final s = mediaSource;
+    if (s == null) return false;
+    return s.contains('youtube.com') || s.contains('youtu.be');
+  }
+
+  /// 명상 미디어가 웹 URL인지 (유튜브 제외한 스트리밍 오디오 등)
+  bool get mediaIsUrl {
+    final s = mediaSource;
+    if (s == null) return false;
+    return s.startsWith('http://') || s.startsWith('https://');
+  }
 
   /// 해당 날짜가 이 루틴의 '의무(마감) 인증일'인지 (시즌 기간 내에서만)
   bool isDutyDay(DateTime date) {
@@ -209,6 +225,7 @@ class Routine {
         'timerMinutes': timerMinutes,
         'targetSteps': targetSteps,
         'dueWeekday': dueWeekday,
+        'mediaSource': mediaSource,
         'requireNote': requireNote,
         'windowStartMin': windowStartMin,
         'windowEndMin': windowEndMin,
@@ -235,6 +252,7 @@ class Routine {
         timerMinutes: (j['timerMinutes'] as num?)?.toInt() ?? 15,
         targetSteps: (j['targetSteps'] as num?)?.toInt() ?? 6000,
         dueWeekday: (j['dueWeekday'] as num?)?.toInt() ?? 7,
+        mediaSource: j['mediaSource'] as String?,
         requireNote: j['requireNote'] as bool? ?? false,
         windowStartMin: (j['windowStartMin'] as num?)?.toInt(),
         windowEndMin: (j['windowEndMin'] as num?)?.toInt(),

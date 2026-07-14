@@ -50,6 +50,9 @@ dependencies:
   # 웹 계정 로그인 (선택 — 프로필 표시, 향후 게시판 연동)
   webview_flutter: ^4.10.0
 
+  # 명상 모드 유튜브 열기
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
