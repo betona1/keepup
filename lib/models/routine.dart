@@ -10,8 +10,13 @@ enum RoutineType {
 enum DutyCycle {
   everyday, // 적립형 주7일 (매일)
   sixDays, // 적립형 주6일 (월~토)
-  weeklySunday, // 결과형 매주 일요일
+  weekly, // 결과형 매주 1회 (요일은 dueWeekday로 선택)
+  every15days, // 결과형 15일마다 1회
+  once, // 결과형 1회성 (기간 끝에 한 번)
 }
+
+/// 결과형 주기 집합 — 기간 내 자유 인증 + 마감일 기준 기록
+const resultCycles = {DutyCycle.weekly, DutyCycle.every15days, DutyCycle.once};
 
 /// 검증(인증) 방식 — "스마트폰으로 모든 검증"
 enum VerifyMethod {
@@ -33,9 +38,13 @@ extension DutyCycleLabel on DutyCycle {
   String get label => switch (this) {
         DutyCycle.everyday => '매일 (주7일)',
         DutyCycle.sixDays => '월~토 (주6일)',
-        DutyCycle.weeklySunday => '매주 일요일',
+        DutyCycle.weekly => '매주 1회',
+        DutyCycle.every15days => '15일마다 1회',
+        DutyCycle.once => '기간 내 1회',
       };
 }
+
+const weekdayNames = ['월', '화', '수', '목', '금', '토', '일']; // index = weekday-1
 
 extension VerifyMethodLabel on VerifyMethod {
   String get label => switch (this) {
@@ -72,6 +81,7 @@ class Routine {
   final VerifyMethod verifyMethod;
   final int timerMinutes; // 타이머 인증 목표(분)
   final int targetSteps; // 걸음수 인증 목표(보)
+  final int dueWeekday; // weekly 주기의 마감 요일 (1=월 ... 7=일)
   final bool requireNote; // 소감/느낀점 필수 작성
   final int? windowStartMin; // 인증 가능 시작 시각 (자정 기준 분, 예: 300 = 05:00)
   final int? windowEndMin; // 인증 마감 시각 — 설정 시 이 시각이 그날의 마감이 된다
@@ -91,6 +101,7 @@ class Routine {
     this.verifyMethod = VerifyMethod.photo,
     this.timerMinutes = 15,
     this.targetSteps = 6000,
+    this.dueWeekday = 7,
     this.requireNote = false,
     this.windowStartMin,
     this.windowEndMin,
@@ -101,33 +112,48 @@ class Routine {
         endDate = _dateOnly(
             endDate ?? (startDate ?? createdAt).add(const Duration(days: 62)));
 
-  /// 해당 날짜가 이 루틴의 '의무 인증일'인지 (시즌 기간 내에서만)
+  /// 이 루틴이 결과형 주기인지 (기간 내 자유 인증)
+  bool get isResultCycle => resultCycles.contains(dutyCycle);
+
+  /// 해당 날짜가 이 루틴의 '의무(마감) 인증일'인지 (시즌 기간 내에서만)
   bool isDutyDay(DateTime date) {
     final d = _dateOnly(date);
     if (d.isBefore(startDate) || d.isAfter(endDate)) return false;
+    if (isResultCycle) return d == dutyKeyDate(d); // 각 주기의 마감일만
     // DateTime.weekday: 월=1 ... 일=7
     return switch (dutyCycle) {
       DutyCycle.everyday => true,
       DutyCycle.sixDays => date.weekday != DateTime.sunday,
-      DutyCycle.weeklySunday => date.weekday == DateTime.sunday,
+      _ => false,
     };
   }
 
-  /// 오늘 인증을 '할 수 있는' 날인지 — 결과형은 주중 언제든 미리 인증 가능
+  /// 오늘 인증을 '할 수 있는' 날인지 — 결과형은 기간 내 언제든 미리 인증 가능
   bool canCertifyOn(DateTime date) {
     final d = _dateOnly(date);
     if (d.isBefore(startDate) || d.isAfter(endDate)) return false;
-    if (dutyCycle == DutyCycle.weeklySunday) return true; // 주중 아무 때나
+    if (isResultCycle) return true;
     return isDutyDay(date);
   }
 
-  /// 인증이 카운트되는 의무일 — 결과형은 그 주 일요일, 나머지는 그날
+  /// 인증이 카운트되는 의무(마감)일 — 결과형은 현재 주기의 마감일, 적립형은 그날
   DateTime dutyKeyDate(DateTime date) {
     final d = _dateOnly(date);
-    if (dutyCycle != DutyCycle.weeklySunday) return d;
-    final sunday = d.add(Duration(days: DateTime.sunday - d.weekday));
-    // 주 마감(일요일)이 시즌 종료일을 넘으면 종료일로 캡
-    return sunday.isAfter(endDate) ? endDate : sunday;
+    late DateTime due;
+    switch (dutyCycle) {
+      case DutyCycle.weekly:
+        // 다음(또는 오늘) dueWeekday
+        final diff = (dueWeekday - d.weekday + 7) % 7;
+        due = d.add(Duration(days: diff));
+      case DutyCycle.every15days:
+        final ds = d.difference(startDate).inDays;
+        due = startDate.add(Duration(days: (ds ~/ 15) * 15 + 14));
+      case DutyCycle.once:
+        due = endDate;
+      default:
+        return d;
+    }
+    return due.isAfter(endDate) ? endDate : due;
   }
 
   /// 시즌이 끝났는지
@@ -182,6 +208,7 @@ class Routine {
         'verifyMethod': verifyMethod.name,
         'timerMinutes': timerMinutes,
         'targetSteps': targetSteps,
+        'dueWeekday': dueWeekday,
         'requireNote': requireNote,
         'windowStartMin': windowStartMin,
         'windowEndMin': windowEndMin,
@@ -195,7 +222,10 @@ class Routine {
         type: RoutineType.values.byName(j['type'] as String),
         title: j['title'] as String,
         reason: j['reason'] as String? ?? '',
-        dutyCycle: DutyCycle.values.byName(j['dutyCycle'] as String),
+        // 구버전 'weeklySunday'는 weekly(일요일)로 이전
+        dutyCycle: j['dutyCycle'] == 'weeklySunday'
+            ? DutyCycle.weekly
+            : DutyCycle.values.byName(j['dutyCycle'] as String),
         backupTitle: j['backupTitle'] as String?,
         targetValue: j['targetValue'] as String?,
         createdAt: DateTime.parse(j['createdAt'] as String),
@@ -204,6 +234,7 @@ class Routine {
             : VerifyMethod.photo,
         timerMinutes: (j['timerMinutes'] as num?)?.toInt() ?? 15,
         targetSteps: (j['targetSteps'] as num?)?.toInt() ?? 6000,
+        dueWeekday: (j['dueWeekday'] as num?)?.toInt() ?? 7,
         requireNote: j['requireNote'] as bool? ?? false,
         windowStartMin: (j['windowStartMin'] as num?)?.toInt(),
         windowEndMin: (j['windowEndMin'] as num?)?.toInt(),

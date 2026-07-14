@@ -13,6 +13,8 @@ class AddRoutineScreen extends StatefulWidget {
 class _AddRoutineScreenState extends State<AddRoutineScreen> {
   RoutineType _type = RoutineType.accumulate;
   DutyCycle _accumCycle = DutyCycle.everyday;
+  DutyCycle _resultCycle = DutyCycle.weekly;
+  int _dueWeekday = 7; // 매주 주기의 마감 요일 (기본 일요일)
   VerifyMethod _verify = VerifyMethod.photo;
   int _timerMinutes = 15;
   int _targetSteps = 6000;
@@ -58,7 +60,8 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
       title: _title.text.trim(),
       reason: _reason.text.trim(),
       dutyCycle:
-          _type == RoutineType.accumulate ? _accumCycle : DutyCycle.weeklySunday,
+          _type == RoutineType.accumulate ? _accumCycle : _resultCycle,
+      dueWeekday: _dueWeekday,
       backupTitle: _type == RoutineType.accumulate && _backup.text.trim().isNotEmpty
           ? _backup.text.trim()
           : null,
@@ -197,10 +200,55 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
                 hintText: '예: 총 300페이지, 10km 4회 등',
               ),
             ),
+            const SizedBox(height: 12),
+            Text('인증 주기', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            const _InfoBox(
-              text: '결과형은 매주 일요일 23:59까지 진행 결과를 인증합니다.\n'
-                  '실행 여부를 판단할 수 있도록 목표를 구체적으로 적어주세요.',
+            SegmentedButton<DutyCycle>(
+              segments: const [
+                ButtonSegment(value: DutyCycle.weekly, label: Text('매주 1회')),
+                ButtonSegment(
+                    value: DutyCycle.every15days, label: Text('15일마다')),
+                ButtonSegment(value: DutyCycle.once, label: Text('1회성')),
+              ],
+              selected: {_resultCycle},
+              onSelectionChanged: (s) =>
+                  setState(() => _resultCycle = s.first),
+            ),
+            if (_resultCycle == DutyCycle.weekly) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text('마감 요일',
+                      style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 4,
+                      children: List.generate(7, (i) {
+                        final wd = i + 1; // 1=월 ... 7=일
+                        return ChoiceChip(
+                          label: Text(weekdayNames[i]),
+                          selected: _dueWeekday == wd,
+                          visualDensity: VisualDensity.compact,
+                          onSelected: (_) =>
+                              setState(() => _dueWeekday = wd),
+                        );
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 8),
+            _InfoBox(
+              text: switch (_resultCycle) {
+                DutyCycle.weekly =>
+                  '매주 ${weekdayNames[_dueWeekday - 1]}요일 23:59가 마감입니다. 그 주 안이면 언제든 미리 인증할 수 있어요.\n마감 3일 전부터 매일 아침 9시에 알림을 드립니다.',
+                DutyCycle.every15days =>
+                  '15일마다 한 번씩 결과를 인증합니다. 각 기간 안이면 언제든 미리 인증 가능.\n마감 3일 전부터 매일 아침 9시에 알림을 드립니다.',
+                _ =>
+                  '완료 목표일에 한 번만 결과를 인증하는 방식입니다. 기간 안이면 언제든 인증 가능.\n마감 3일 전부터 매일 아침 9시에 알림을 드립니다.',
+              },
             ),
           ],
           const SizedBox(height: 20),
@@ -330,14 +378,19 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
             onPressed: () async {
               final now = DateTime.now();
               final today = DateTime(now.year, now.month, now.day);
-              final minEnd = today.add(const Duration(days: 29)); // 최소 30일
+              // 적립형 최소 30일~2년, 결과형 최소 1주~1년
+              final minDays = isAccum ? 29 : 6;
+              final maxDays = isAccum ? 730 : 364;
+              final minEnd = today.add(Duration(days: minDays));
               final picked = await showDatePicker(
                 context: context,
                 initialDate:
                     _endDate.isBefore(minEnd) ? minEnd : _endDate,
                 firstDate: minEnd,
-                lastDate: today.add(const Duration(days: 730)),
-                helpText: '완료 목표일 선택 (최소 30일)',
+                lastDate: today.add(Duration(days: maxDays)),
+                helpText: isAccum
+                    ? '완료 목표일 선택 (최소 30일)'
+                    : '완료 목표일 선택 (최소 1주 ~ 최대 1년)',
               );
               if (picked != null) setState(() => _endDate = picked);
             },
@@ -351,13 +404,23 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
           const SizedBox(height: 8),
           Wrap(
             spacing: 6,
-            children: [
-              (30, '30일'),
-              (63, '63일'),
-              (100, '100일'),
-              (365, '1년'),
-              (730, '2년'),
-            ].map((preset) {
+            children: (isAccum
+                    ? const [
+                        (30, '30일'),
+                        (63, '63일'),
+                        (100, '100일'),
+                        (365, '1년'),
+                        (730, '2년'),
+                      ]
+                    : const [
+                        (7, '1주'),
+                        (14, '2주'),
+                        (30, '1개월'),
+                        (90, '3개월'),
+                        (180, '6개월'),
+                        (365, '1년'),
+                      ])
+                .map((preset) {
               final now = DateTime.now();
               final target = DateTime(now.year, now.month, now.day)
                   .add(Duration(days: preset.$1 - 1));
@@ -371,7 +434,10 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
             }).toList(),
           ),
           const SizedBox(height: 4),
-          Text('기간은 내가 정합니다 (최소 30일). 1년, 2년 쌓일 때 진짜 습관이 됩니다.',
+          Text(
+              isAccum
+                  ? '기간은 내가 정합니다 (최소 30일). 1년, 2년 쌓일 때 진짜 습관이 됩니다.'
+                  : '결과형 기간: 최소 1주 ~ 최대 1년. "이번 달 말까지"처럼 자유롭게 정하세요.',
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 16),
           TextField(

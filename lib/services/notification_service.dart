@@ -23,7 +23,7 @@ class NotificationService {
 
   // 예약 상한 (iOS는 대기 알림 64개 제한이 있어 여유 있게 60으로 캡)
   static const int _maxPending = 60;
-  static const int _horizonDays = 10;
+  static const int _horizonDays = 21; // 결과형 D-3 리마인더까지 여유 있게
 
   Future<void> init() async {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -69,10 +69,24 @@ class NotificationService {
         if (certifiedKeys.contains(key)) continue; // 이미 인증 → 알림 없음
 
         final deadline = r.deadlineOf(day);
+        // 마감 당일 긴박 알림 (3h/1h/30m 전) — 공통
         for (var s = 0; s < offsetsMinutes.length; s++) {
           final when = deadline.subtract(Duration(minutes: offsetsMinutes[s]));
           if (when.isAfter(now)) {
             pendings.add(_Pending(r, day, s, offsetsMinutes[s], when));
+          }
+        }
+        // 결과형: 마감 3일 전부터 마감일까지 매일 아침 9시 리마인더
+        if (r.isResultCycle) {
+          for (var back = 3; back >= 0; back--) {
+            final remindDay = day.subtract(Duration(days: back));
+            final when = DateTime(
+                remindDay.year, remindDay.month, remindDay.day, 9, 0);
+            if (when.isAfter(now)) {
+              final label = back == 0 ? '오늘이 마감일!' : '마감 D-$back';
+              pendings.add(_Pending(r, day, 10 + back, 0, when,
+                  customLabel: label));
+            }
           }
         }
       }
@@ -112,13 +126,16 @@ class NotificationService {
   Future<void> _scheduleOne(int id, _Pending p) async {
     final tzTime = tz.TZDateTime.from(p.when, tz.local);
 
-    final label = switch (p.offsetMin) {
-      180 => '마감 3시간 전',
-      60 => '마감 1시간 전',
-      _ => '마감 30분 전',
-    };
+    final label = p.customLabel ??
+        switch (p.offsetMin) {
+          180 => '마감 3시간 전',
+          60 => '마감 1시간 전',
+          _ => '마감 30분 전',
+        };
     final title = '⏰ $label · 아직 인증 안 했어요';
-    final body = "'${p.routine.title}' 오늘(${dateKeyOf(p.day)}) 인증하고 습관 지키기!";
+    final body = p.routine.isResultCycle
+        ? "'${p.routine.title}' 마감(${dateKeyOf(p.day)})까지 결과를 인증해 주세요!"
+        : "'${p.routine.title}' 오늘(${dateKeyOf(p.day)}) 인증하고 습관 지키기!";
 
     await _plugin.zonedSchedule(
       id: id,
@@ -149,5 +166,7 @@ class _Pending {
   final int slot;
   final int offsetMin;
   final DateTime when;
-  _Pending(this.routine, this.day, this.slot, this.offsetMin, this.when);
+  final String? customLabel; // 결과형 D-n 리마인더 등
+  _Pending(this.routine, this.day, this.slot, this.offsetMin, this.when,
+      {this.customLabel});
 }
