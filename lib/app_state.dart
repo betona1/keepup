@@ -176,6 +176,34 @@ class AppState extends ChangeNotifier {
       .toSet()
       .length;
 
+  /// 연속 도장 일수 — 오늘(또는 어제)부터 거꾸로, 인증이 하나라도 있는 날 연속
+  int dayStreak() {
+    if (certs.isEmpty) return 0;
+    final days = certs.map((c) => c.dateKey).toSet();
+    final now = DateTime.now();
+    var cursor = DateTime(now.year, now.month, now.day);
+    // 오늘 아직 안 찍었으면 어제부터 계산 (오늘은 아직 기회가 있으므로 끊긴 것 아님)
+    if (!days.contains(dateKeyOf(cursor))) {
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    var streak = 0;
+    while (days.contains(dateKeyOf(cursor))) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
+  /// 전체 도장 개수
+  int totalStamps() => certs.length;
+
+  /// 사진 있는 최근 인증 (홈 갤러리 스트립용)
+  List<Certification> recentPhotoCerts({int limit = 10}) {
+    final list = certs.where((c) => c.hasPhoto).toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return list.take(limit).toList();
+  }
+
   /// 미인증 카운트 (반장 제외 등은 혼자 쓰므로 생략, 순수 통계용)
   int missCountForRoutine(String routineId) {
     final r = routineById(routineId);

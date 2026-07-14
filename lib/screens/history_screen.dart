@@ -126,59 +126,54 @@ class _StampCalendar extends StatelessWidget {
       cursor = cursor.add(const Duration(days: 1));
     }
 
+    // 최장 연속 인증 (의무일 기준)
+    var longest = 0;
+    var cur = 0;
+    for (var d = routine.startDate;
+        !d.isAfter(todayOnly) && !d.isAfter(routine.endDate);
+        d = d.add(const Duration(days: 1))) {
+      if (!routine.isDutyDay(d)) continue;
+      if (state.isCertified(routine.id, d)) {
+        cur++;
+        if (cur > longest) longest = cur;
+      } else {
+        cur = 0;
+      }
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 헤더: 기간 + D-day + 달성률
+            // 헤더: 루틴명(브랜드 블루) + 기간/D-day
+            Text(routine.title,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(color: cs.primary, fontSize: 19),
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 2),
+            Text(
+              '${DateFormat('yy.MM.dd').format(routine.startDate)}'
+              ' ~ ${DateFormat('yy.MM.dd').format(routine.endDate)}'
+              '${daysLeft >= 0 ? ' · D-$daysLeft' : ' · 시즌 종료'}',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            // 통계 3타일 (Stitch: Completion / Longest / Stamps)
             Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(routine.title,
-                          style: Theme.of(context).textTheme.titleMedium,
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${DateFormat('yy.MM.dd').format(routine.startDate)}'
-                        ' ~ ${DateFormat('yy.MM.dd').format(routine.endDate)}'
-                        '${daysLeft >= 0 ? ' · D-$daysLeft' : ' · 시즌 종료'}',
-                        style: TextStyle(
-                            fontSize: 12, color: cs.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ),
-                // 성취 완성도 %
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('$percent%',
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.stamp,
-                        )),
-                    Text('도장 $done / $total',
-                        style: TextStyle(
-                            fontSize: 11, color: cs.onSurfaceVariant)),
-                  ],
-                ),
+                _StatTile(label: '달성률', value: '$percent%'),
+                const SizedBox(width: 8),
+                _StatTile(label: '최장 연속', value: '$longest일'),
+                const SizedBox(width: 8),
+                _StatTile(
+                    label: '도장',
+                    value: '$done/$total',
+                    highlight: true),
               ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: percent / 100,
-                minHeight: 8,
-                backgroundColor: cs.surfaceContainerHighest,
-                color: AppTheme.stamp,
-              ),
             ),
             const SizedBox(height: 14),
             // 요일 헤더
@@ -210,6 +205,46 @@ class _StampCalendar extends StatelessWidget {
                   ));
                 }),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 통계 타일 — 도장 타일은 인주색 테두리 강조
+class _StatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool highlight;
+  const _StatTile(
+      {required this.label, required this.value, this.highlight = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: highlight ? AppTheme.stampSoft.withValues(alpha: 0.5) : null,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: highlight ? AppTheme.stamp : cs.outlineVariant,
+              width: highlight ? 1.4 : 1),
+        ),
+        child: Column(
+          children: [
+            Text(label,
+                style:
+                    TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            const SizedBox(height: 3),
+            Text(value,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: highlight ? AppTheme.stamp : cs.primary,
+                )),
           ],
         ),
       ),
@@ -250,6 +285,7 @@ class _DayCell extends StatelessWidget {
       }
     }
 
+    // Stitch 시안: 인증 = 인주색 둥근 사각 도장, 남은 날 = 옅은 테두리 + 날짜
     return AspectRatio(
       aspectRatio: 1,
       child: InkWell(
@@ -258,25 +294,35 @@ class _DayCell extends StatelessWidget {
             : null,
         borderRadius: BorderRadius.circular(10),
         child: Container(
-          margin: const EdgeInsets.all(2),
+          margin: const EdgeInsets.all(2.5),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            border: isToday
-                ? Border.all(color: cs.primary, width: 1.4)
-                : null,
-            color: !inSeason
-                ? Colors.transparent
+            color: certified
+                ? AppTheme.stampSoft.withValues(alpha: 0.6)
                 : missed
-                    ? cs.errorContainer.withValues(alpha: 0.45)
+                    ? cs.errorContainer.withValues(alpha: 0.4)
                     : Colors.transparent,
+            border: certified
+                ? Border.all(color: AppTheme.stamp, width: 1.6)
+                : isToday
+                    ? Border.all(color: cs.primary, width: 1.5)
+                    : inSeason && isDuty
+                        ? Border.all(
+                            color: cs.outlineVariant
+                                .withValues(alpha: 0.6))
+                        : null,
           ),
           alignment: Alignment.center,
           child: certified
-              ? StampMark(size: 26, filledCheck: true)
+              ? Transform.rotate(
+                  angle: -0.12,
+                  child: const Icon(Icons.check_circle_outline,
+                      size: 17, color: AppTheme.stamp),
+                )
               : Text(
                   inSeason ? '${day.day}' : '',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 10.5,
                     color: !isDuty
                         ? cs.outlineVariant
                         : isPast || isToday

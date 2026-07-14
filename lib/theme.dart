@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
-/// KeepUp 디자인 시스템
-/// - 브랜드: 인디고(#4C6EF5, 웹과 동일) / 포인트: 인주색 도장(#E8503A)
-/// - 서체: 네이버 나눔고딕 (번들)
+/// KeepUp 디자인 시스템 — Stitch 'KeepUp' 팔레트 (2026-07-14 적용)
+/// - 브랜드: 딥블루(#274ED5) / 포인트: 도장 인주색(#B32A19 계열)
+/// - 서체: 네이버 나눔고딕 (번들, 변경 금지)
 class AppTheme {
-  static const seed = Color(0xFF4C6EF5); // 브랜드 인디고
-  static const stamp = Color(0xFFE8503A); // 도장 인주색 (인증/강조 전용)
-  static const stampSoft = Color(0xFFFDEEEB); // 인주색 옅은 배경
+  static const seed = Color(0xFF274ED5); // 브랜드 딥블루 (Stitch primary)
+  static const seedBright = Color(0xFF4669F0); // primary-container
+  static const stamp = Color(0xFFB32A19); // 도장 인주색 (테두리·텍스트)
+  static const stampAccent = Color(0xFFFC5E47); // 도장 강조(채움)
+  static const stampSoft = Color(0xFFFFDAD4); // 도장 옅은 배경
+  static const success = Color(0xFF098730); // 완료 그린 (Stitch tertiary)
 
   static ThemeData light() {
     final cs = ColorScheme.fromSeed(
@@ -14,11 +17,16 @@ class AppTheme {
       brightness: Brightness.light,
     ).copyWith(
       primary: seed,
-      surface: const Color(0xFFF6F7FC), // 종이 느낌 배경
+      primaryContainer: seedBright,
+      onPrimaryContainer: Colors.white,
+      surface: const Color(0xFFF7F9FF), // Stitch surface
       surfaceContainerLowest: Colors.white,
-      tertiary: stamp,
-      tertiaryContainer: stampSoft,
-      onTertiaryContainer: const Color(0xFFB33A29),
+      onSurface: const Color(0xFF181C20),
+      onSurfaceVariant: const Color(0xFF444654),
+      outlineVariant: const Color(0xFFC4C5D7),
+      tertiary: success,
+      tertiaryContainer: const Color(0xFFDCF5DF),
+      onTertiaryContainer: const Color(0xFF01522A),
     );
     return _base(cs).copyWith(
       scaffoldBackgroundColor: cs.surface,
@@ -27,7 +35,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFE7EAF3)),
+          side: const BorderSide(color: Color(0xFFE4E7F2)),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -39,9 +47,9 @@ class AppTheme {
       seedColor: seed,
       brightness: Brightness.dark,
     ).copyWith(
-      tertiary: const Color(0xFFFF8A75),
-      tertiaryContainer: const Color(0xFF4A241E),
-      onTertiaryContainer: const Color(0xFFFFB4A5),
+      tertiary: const Color(0xFF7ADB93),
+      tertiaryContainer: const Color(0xFF0B4A22),
+      onTertiaryContainer: const Color(0xFFBDF0C6),
     );
     return _base(cs).copyWith(
       cardTheme: CardThemeData(
@@ -73,7 +81,7 @@ class AppTheme {
             fontFamily: 'NanumGothic',
             fontWeight: FontWeight.w800,
             fontSize: 20,
-            color: cs.onSurface,
+            color: cs.primary, // Stitch 시안: 타이틀을 브랜드 블루로
           ),
         ),
         navigationBarTheme: NavigationBarThemeData(
@@ -162,6 +170,54 @@ class StampMark extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
       ),
+    );
+  }
+}
+
+/// 루틴 행의 도장 버튼 — 미인증: 회색 STAMP 링 / 인증: 인주색 UP! 도장 (Stitch 시안)
+class StampButton extends StatelessWidget {
+  final bool certified;
+  final double size;
+  const StampButton({super.key, required this.certified, this.size = 52});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (certified) {
+      return Transform.rotate(
+        angle: -0.14,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppTheme.stampSoft,
+            border: Border.all(color: AppTheme.stamp, width: size * 0.075),
+          ),
+          alignment: Alignment.center,
+          child: Text('UP!',
+              style: TextStyle(
+                color: AppTheme.stamp,
+                fontWeight: FontWeight.w800,
+                fontSize: size * 0.27,
+              )),
+        ),
+      );
+    }
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: cs.outlineVariant, width: size * 0.055),
+      ),
+      alignment: Alignment.center,
+      child: Text('도장',
+          style: TextStyle(
+            color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+            fontWeight: FontWeight.w800,
+            fontSize: size * 0.24,
+          )),
     );
   }
 }

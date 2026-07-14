@@ -47,6 +47,9 @@ dependencies:
   archive: ^4.0.4
   file_picker: ^10.1.2
 
+  # 웹 계정 로그인 (선택 — 프로필 표시, 향후 게시판 연동)
+  webview_flutter: ^4.10.0
+
 dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
@@ -72,6 +75,6 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: assets/icon/icon.png
-  adaptive_icon_background: "#4C6EF5"
+  adaptive_icon_background: "#274ED5"
   adaptive_icon_foreground: assets/icon/icon_fg.png
   remove_alpha_ios: true
