@@ -10,6 +10,7 @@ import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 import 'screens/home_screen.dart';
 import 'widgets/marquee_text.dart';
+import 'services/backup_service.dart';
 import 'screens/history_screen.dart';
 import 'screens/add_routine_screen.dart';
 
@@ -89,6 +90,60 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _exportBackup() async {
+    final r = widget.state.routines.length;
+    final c = widget.state.certs.length;
+    if (r == 0 && c == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('백업할 데이터가 아직 없어요')));
+      return;
+    }
+    try {
+      await BackupService.exportAndShare(
+          widget.state.routines, widget.state.certs);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('백업 실패: $e')));
+      }
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('백업 불러오기'),
+        content: const Text(
+            '백업 파일의 내용으로 현재 데이터를 교체합니다.\n지금 이 폰에 있는 루틴·인증 기록은 사라져요. 계속할까요?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('불러오기')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final result = await BackupService.pickAndRead();
+      if (result == null) return; // 파일 선택 취소
+      await widget.state.restoreAll(result.$1, result.$2);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                '복원 완료! 루틴 ${result.$1.length}개, 인증 ${result.$2.length}개를 불러왔어요 🎉')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('복원 실패: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final titles = ['습관챌린지', '기록 · 추억'];
@@ -136,6 +191,34 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
                 );
               }
             },
+          ),
+          // 백업/이전 메뉴
+          PopupMenuButton<String>(
+            tooltip: '백업/이전',
+            onSelected: (v) {
+              if (v == 'export') _exportBackup();
+              if (v == 'import') _importBackup();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'export',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.upload_file),
+                  title: Text('데이터 백업 (파일로 내보내기)'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'import',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.download),
+                  title: Text('백업 불러오기 (복원)'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

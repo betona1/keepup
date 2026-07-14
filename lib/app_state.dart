@@ -104,6 +104,14 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  /// 백업 복원 — 현재 데이터를 백업 내용으로 전부 교체
+  Future<void> restoreAll(
+      List<Routine> newRoutines, List<Certification> newCerts) async {
+    routines = newRoutines;
+    certs = newCerts;
+    await _persistAndSync();
+  }
+
   // ---- 인증 ----
 
   Future<void> addCertification(Certification c) async {

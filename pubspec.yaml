@@ -43,6 +43,10 @@ dependencies:
   # 걸음수 자동 검증 (Health Connect / HealthKit)
   health: ^13.3.1
 
+  # 기기 간 백업/이전 (ZIP 내보내기·불러오기)
+  archive: ^4.0.4
+  file_picker: ^10.1.2
+
 dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
