@@ -12,3 +12,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# 정식 서명 키 (절대 커밋 금지)
+key.properties
+**/keepup-release.jks
