@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'models/routine.dart';
+import 'models/retro_stats.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 
@@ -204,6 +205,102 @@ class AppState extends ChangeNotifier {
     final list = certs.where((c) => c.hasPhoto).toList()
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
     return list.take(limit).toList();
+  }
+
+  // ---- 회고 ----
+
+  /// 시즌이 끝난 루틴들 (회고 카드 대상)
+  List<Routine> endedRoutines([DateTime? today]) {
+    final t = today ?? DateTime.now();
+    return routines.where((r) => r.isEnded(t)).toList();
+  }
+
+  /// 시즌 회고 통계 — 루틴 하나의 여정 전체를 집계한다.
+  RetroStats retroStatsFor(String routineId) {
+    final r = routineById(routineId)!;
+    final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+
+    final mine = certsForRoutine(routineId); // 최신순
+    final stampedKeys = mine.map((c) => c.dateKey).toSet();
+
+    // 시즌 전체를 하루씩 훑으며 도장 그리드 + 연속/미인증 집계
+    final marks = <int>[];
+    var longest = 0;
+    var cur = 0;
+    var missed = 0;
+    var totalDuty = 0;
+
+    final gridStart =
+        r.startDate.subtract(Duration(days: r.startDate.weekday - 1));
+    var cursor = gridStart;
+    while (true) {
+      final inSeason =
+          !cursor.isBefore(r.startDate) && !cursor.isAfter(r.endDate);
+      if (!inSeason) {
+        marks.add(DayMark.outside);
+      } else {
+        final isDuty = r.isDutyDay(cursor);
+        final stamped = stampedKeys.contains(dateKeyOf(cursor));
+        if (isDuty) totalDuty++;
+
+        if (stamped) {
+          marks.add(DayMark.stamped);
+        } else if (!isDuty) {
+          marks.add(DayMark.rest);
+        } else if (cursor.isBefore(todayOnly)) {
+          marks.add(DayMark.missed);
+          missed++;
+        } else {
+          marks.add(DayMark.upcoming);
+        }
+
+        // 최장 연속은 의무일만 대상으로, 오늘까지만 판정
+        if (isDuty && !cursor.isAfter(todayOnly)) {
+          if (stamped) {
+            cur++;
+            if (cur > longest) longest = cur;
+          } else if (cursor.isBefore(todayOnly)) {
+            cur = 0; // 오늘은 아직 기회가 있으므로 끊지 않는다
+          }
+        }
+      }
+
+      // 시즌 끝을 지나고 주(7칸)가 채워지면 종료
+      if (cursor.isAfter(r.endDate) && marks.length % 7 == 0) break;
+      cursor = cursor.add(const Duration(days: 1));
+    }
+
+    var minutes = 0;
+    var steps = 0;
+    var backup = 0;
+    for (final c in mine) {
+      minutes += (c.durationSec ?? 0) ~/ 60;
+      steps += c.steps ?? 0;
+      if (c.isBackup) backup++;
+    }
+
+    final percent = totalDuty == 0
+        ? 0
+        : ((stampedKeys.length / totalDuty) * 100).round().clamp(0, 100);
+
+    return RetroStats(
+      routine: r,
+      totalDutyDays: totalDuty,
+      certifiedDays: stampedKeys.length,
+      percent: percent,
+      longestStreak: longest,
+      missedDays: missed,
+      backupCount: backup,
+      totalCerts: mine.length,
+      totalMinutes: minutes,
+      totalSteps: steps,
+      firstCertAt: mine.isEmpty ? null : mine.last.timestamp,
+      lastCertAt: mine.isEmpty ? null : mine.first.timestamp,
+      photoCerts: mine.where((c) => c.hasPhoto).take(4).toList(),
+      dayMarks: marks,
+      ended: r.isEnded(now),
+    );
   }
 
   /// 미인증 카운트 (반장 제외 등은 혼자 쓰므로 생략, 순수 통계용)

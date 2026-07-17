@@ -7,6 +7,7 @@ import '../app_state.dart';
 import '../models/routine.dart';
 import '../services/share_service.dart';
 import '../theme.dart';
+import 'retro_screen.dart';
 
 class HistoryBody extends StatefulWidget {
   final AppState state;
@@ -205,6 +206,24 @@ class _StampCalendar extends StatelessWidget {
                   ));
                 }),
               ),
+            const SizedBox(height: 12),
+            // 회고 카드 — 시즌이 끝났으면 강조, 진행 중이면 중간 회고
+            SizedBox(
+              width: double.infinity,
+              child: daysLeft < 0
+                  ? FilledButton.icon(
+                      onPressed: () =>
+                          openRetroCard(context, state, routine),
+                      icon: const Icon(Icons.card_giftcard, size: 18),
+                      label: const Text('시즌 회고 카드 보기'),
+                    )
+                  : OutlinedButton.icon(
+                      onPressed: () =>
+                          openRetroCard(context, state, routine),
+                      icon: const Icon(Icons.insights_outlined, size: 18),
+                      label: const Text('중간 회고 카드'),
+                    ),
+            ),
           ],
         ),
       ),

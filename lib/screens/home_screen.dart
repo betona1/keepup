@@ -8,6 +8,7 @@ import '../services/quote_service.dart';
 import '../theme.dart';
 import 'certify_screen.dart';
 import 'history_screen.dart' show showCertDetail;
+import 'retro_screen.dart';
 import 'web_login_screen.dart';
 
 class HomeBody extends StatelessWidget {
@@ -30,6 +31,7 @@ class HomeBody extends StatelessWidget {
             .where((r) => state.isCertified(r.id, r.dutyKeyDate(today)))
             .length;
         final photos = state.recentPhotoCerts();
+        final ended = state.endedRoutines(today);
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
@@ -39,6 +41,11 @@ class HomeBody extends StatelessWidget {
             if (state.routines.isEmpty)
               _EmptyState()
             else ...[
+              // 끝난 시즌은 오늘의 루틴에서 사라지므로, 회고 카드로 마무리를 남긴다
+              ...ended.map((r) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _RetroBanner(state: state, routine: r),
+                  )),
               _StreakCard(streak: state.dayStreak()),
               const SizedBox(height: 12),
               if (duty.isNotEmpty) ...[
@@ -244,6 +251,79 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
       onTap: _onTap,
       customBorder: const CircleBorder(),
       child: _avatarCircle(40),
+    );
+  }
+}
+
+/// 시즌 종료 배너 — 완주한 루틴의 회고 카드로 안내
+class _RetroBanner extends StatelessWidget {
+  final AppState state;
+  final Routine routine;
+  const _RetroBanner({required this.state, required this.routine});
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = state.progressPercent(routine.id);
+    final done = state.certifiedDayCount(routine.id);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => openRetroCard(context, state, routine),
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF4669F0), Color(0xFF274ED5)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            children: [
+              const StampMark(size: 44, filledCheck: true),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '🎉 시즌이 끝났어요!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${routine.title} · 도장 $done개 · 달성률 $percent%',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '회고 카드를 확인하고 자랑해 보세요',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right,
+                  color: Colors.white.withValues(alpha: 0.9)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
