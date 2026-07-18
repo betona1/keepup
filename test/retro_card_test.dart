@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:keepup/app_state.dart';
+import 'package:keepup/models/notif_settings.dart';
 import 'package:keepup/models/routine.dart';
 import 'package:keepup/services/retro_service.dart';
 import 'package:keepup/services/storage_service.dart';
@@ -341,7 +342,11 @@ class _FakeStorage implements StorageService {
   @override
   List<Certification> loadCerts() => [];
   @override
+  NotifSettings loadNotifSettings() => NotifSettings.defaults;
+  @override
   Future<void> saveRoutines(List<Routine> routines) async {}
   @override
   Future<void> saveCerts(List<Certification> certs) async {}
+  @override
+  Future<void> saveNotifSettings(NotifSettings s) async {}
 }

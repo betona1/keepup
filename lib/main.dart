@@ -13,6 +13,7 @@ import 'widgets/marquee_text.dart';
 import 'services/backup_service.dart';
 import 'screens/history_screen.dart';
 import 'screens/add_routine_screen.dart';
+import 'screens/notif_settings_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -85,8 +86,10 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState s) {
     // 앱을 다시 열 때 알림 상태를 최신으로 재동기화
     if (s == AppLifecycleState.resumed) {
-      NotificationService.instance
-          .reconcile(widget.state.routines, widget.state.certs);
+      NotificationService.instance.reconcile(
+          widget.state.routines,
+          widget.state.certs,
+          widget.state.notifSettings);
     }
   }
 
@@ -178,19 +181,16 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
               )
             : Text(titles[_index]),
         actions: [
-          // [임시] 알림 동작 확인 버튼 — 실기기 테스트 끝나면 제거
+          // 알림 설정 (아침 리마인더 시각 · 마감 임박 슬롯 · 테스트 알림)
           IconButton(
-            tooltip: '테스트 알림 (1분 뒤)',
-            icon: const Icon(Icons.notification_add_outlined),
-            onPressed: () async {
-              await NotificationService.instance.scheduleTestNotification();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('1분 뒤 테스트 알림이 울립니다. 앱을 꺼도 울려요!')),
-                );
-              }
-            },
+            tooltip: '알림 설정',
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => NotifSettingsScreen(state: widget.state),
+              ),
+            ),
           ),
           // 백업/이전 메뉴
           PopupMenuButton<String>(

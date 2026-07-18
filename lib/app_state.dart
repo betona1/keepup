@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'models/routine.dart';
 import 'models/retro_stats.dart';
+import 'models/notif_settings.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 
@@ -11,10 +12,12 @@ class AppState extends ChangeNotifier {
 
   List<Routine> routines = [];
   List<Certification> certs = [];
+  NotifSettings notifSettings = NotifSettings.defaults;
 
   Future<void> load() async {
     routines = _storage.loadRoutines();
     certs = _storage.loadCerts();
+    notifSettings = _storage.loadNotifSettings();
     await _syncNotifications();
     notifyListeners();
   }
@@ -27,7 +30,16 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _syncNotifications() async {
-    await NotificationService.instance.reconcile(routines, certs);
+    await NotificationService.instance
+        .reconcile(routines, certs, notifSettings);
+  }
+
+  /// 알림 설정 변경 → 저장 후 전체 재예약
+  Future<void> updateNotifSettings(NotifSettings s) async {
+    notifSettings = s;
+    await _storage.saveNotifSettings(s);
+    await _syncNotifications();
+    notifyListeners();
   }
 
   // ---- 루틴 ----
