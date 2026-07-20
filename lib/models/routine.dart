@@ -24,9 +24,18 @@ enum VerifyMethod {
   timer, // 앱 내 타이머 (n분 이상 측정)
   audio, // 녹음 (발음 연습 등)
   video, // 동영상 (명상·운동 장면)
-  steps, // 걸음수 자동 검증 (Health Connect)
+  steps, // 걸음수 자동 검증 (Health Connect) — 1차 출시 제외(심사 서류 필요), v2 복원 예정
   link, // URL 인증 (스토어 등록·업로드·공유 링크 등)
 }
+
+/// 루틴 선언에서 선택 가능한 검증 방식 (걸음수는 1차 출시에서 숨김)
+const selectableVerifyMethods = [
+  VerifyMethod.photo,
+  VerifyMethod.timer,
+  VerifyMethod.audio,
+  VerifyMethod.video,
+  VerifyMethod.link,
+];
 
 extension RoutineTypeLabel on RoutineType {
   String get label => switch (this) {

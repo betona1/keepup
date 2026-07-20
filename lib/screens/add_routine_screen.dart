@@ -263,7 +263,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
           // ── 검증 방식 선택 — 루틴 성격에 맞게 고르기 쉽게 카드로 ──
           Text('검증 방법', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          ...VerifyMethod.values.map((m) => Padding(
+          ...selectableVerifyMethods.map((m) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _VerifyCard(
                   method: m,
