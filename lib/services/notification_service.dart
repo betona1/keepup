@@ -139,11 +139,18 @@ class NotificationService {
         }
 
         final deadline = r.deadlineOf(day);
-        // 마감 당일 긴박 알림 (3h/1h/30m 전) — 설정에서 켠 슬롯만
-        for (final offset in settings.activeOffsets) {
+        // 나쁜 버릇 교정: 최근 연속으로 놓친 횟수만큼 마감 전 알람을 늘린다.
+        // 0회=기본, 1회=+2시간 전, 2회=+3시간 전 … (놓칠수록 더 자주 압박)
+        final missStreak = _recentMissStreak(r, day, today, certifiedKeys);
+        final offsets = <int>{...settings.activeOffsets};
+        for (var k = 1; k <= missStreak; k++) {
+          offsets.add(60 * (k + 1)); // 2h, 3h, 4h… 전 슬롯 추가
+        }
+        for (final offset in offsets) {
           final when = deadline.subtract(Duration(minutes: offset));
           if (when.isAfter(ref)) {
-            notices.add(_notice(r, day, when, offsetMin: offset));
+            notices.add(
+                _notice(r, day, when, offsetMin: offset, missStreak: missStreak));
           }
         }
         // 결과형: 마감 3일 전부터 마감일까지 매일 아침(설정 시각) 리마인더
@@ -165,12 +172,32 @@ class NotificationService {
     return notices.take(_maxPending).toList();
   }
 
+  /// 이 의무일 직전까지 '연속으로 놓친 의무일 수'. 인증한 의무일을 만나면 끊긴다.
+  /// (알람 폭주 방지를 위해 최대 5로 캡)
+  int _recentMissStreak(
+      Routine r, DateTime day, DateTime today, Set<String> certifiedKeys) {
+    var streak = 0;
+    var d = day.subtract(const Duration(days: 1));
+    while (!d.isBefore(r.startDate)) {
+      // 미래(아직 지나지 않은 날)는 판정 대상 아님
+      if (!d.isAfter(today) && r.isDutyDay(d)) {
+        if (certifiedKeys.contains('${r.id}|${dateKeyOf(d)}')) break;
+        streak++;
+        if (streak >= 5) break;
+      }
+      d = d.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
   /// 예약 항목 하나의 제목·본문을 만든다.
   PlannedNotice _notice(Routine r, DateTime day, DateTime when,
-      {int? offsetMin, String? customLabel}) {
+      {int? offsetMin, String? customLabel, int missStreak = 0}) {
     final label = customLabel ??
         switch (offsetMin) {
+          240 => '마감 4시간 전',
           180 => '마감 3시간 전',
+          120 => '마감 2시간 전',
           60 => '마감 1시간 전',
           _ => '마감 30분 전',
         };
@@ -178,9 +205,11 @@ class NotificationService {
     final deadline = r.deadlineOf(day);
     final remain = deadline.difference(when);
     final remainText = _remainLabel(remain);
+    // 연속으로 놓쳤으면 압박 문구 (나쁜 버릇 교정)
+    final streakTail = missStreak > 0 ? ' · 벌써 $missStreak번 놓쳤어요!' : '';
     return PlannedNotice(
       when: when,
-      title: '⏰ 오늘 습관챌린지 마감까지 $remainText 남았습니다',
+      title: '⏰ 마감까지 $remainText 남았습니다$streakTail',
       body: "'${r.title}' 아직 인증 안 했어요. 완료하면 알람이 꺼집니다. ($label)",
       routineId: r.id,
       dateKey: dateKeyOf(day),
