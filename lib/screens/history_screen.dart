@@ -8,6 +8,7 @@ import '../app_state.dart';
 import '../models/routine.dart';
 import '../services/share_service.dart';
 import '../theme.dart';
+import 'certify_screen.dart';
 import 'retro_screen.dart';
 
 class HistoryBody extends StatefulWidget {
@@ -311,7 +312,7 @@ class _DayCell extends StatelessWidget {
       child: InkWell(
         onTap: cert != null
             ? () => showCertDetail(context, cert!, routine)
-            : null,
+            : (missed ? () => _offerRecovery(context) : null),
         borderRadius: BorderRadius.circular(10),
         child: Container(
           margin: const EdgeInsets.all(2.5),
@@ -352,6 +353,56 @@ class _DayCell extends StatelessWidget {
                         isToday ? FontWeight.w800 : FontWeight.w400,
                   ),
                 ),
+        ),
+      ),
+    );
+  }
+
+  /// 놓친 지난 날짜 탭 → 누락 인증 복구 (그날 사진/URL로 소급 인증)
+  void _offerRecovery(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${DateFormat('M월 d일 (E)', 'ko').format(day)} 인증 복구',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '이 날 인증을 놓쳤거나 기록이 사라졌나요?\n그날 찍은 사진(날짜 워터마크)으로 도장을 되살릴 수 있어요.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.restore),
+              title: const Text('이 날 인증 복구하기'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CertifyScreen(
+                      state: state,
+                      routine: routine,
+                      day: day,
+                      recovery: true,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );

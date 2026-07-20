@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -18,11 +19,13 @@ class CertifyScreen extends StatefulWidget {
   final AppState state;
   final Routine routine;
   final DateTime day;
+  final bool recovery; // 누락 인증 복구 모드 (지난 날짜 소급 인증)
   const CertifyScreen({
     super.key,
     required this.state,
     required this.routine,
     required this.day,
+    this.recovery = false,
   });
 
   @override
@@ -244,7 +247,9 @@ class _CertifyScreenState extends State<CertifyScreen> {
       };
 
   Future<void> _submit() async {
-    if (!widget.routine.isWithinWindow(DateTime.now())) {
+    // 복구 모드는 지난 날짜 소급 인증이라 시간대 제한을 건너뛴다
+    if (!widget.recovery &&
+        !widget.routine.isWithinWindow(DateTime.now())) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
               '이 루틴은 ${widget.routine.windowLabel} 사이에만 인증할 수 있어요')));
@@ -262,7 +267,10 @@ class _CertifyScreenState extends State<CertifyScreen> {
       return;
     }
     setState(() => _saving = true);
-    final now = DateTime.now();
+    // 복구 모드면 그날 정오를 인증 시각으로 (워터마크·기록이 해당 날짜로 남음)
+    final now = widget.recovery
+        ? DateTime(widget.day.year, widget.day.month, widget.day.day, 12)
+        : DateTime.now();
 
     // 사진이 있으면 날짜·시각 워터마크 자동 삽입 (타이머/녹음은 사진 선택)
     String stampedPath = '';
@@ -347,7 +355,10 @@ class _CertifyScreenState extends State<CertifyScreen> {
     final r = widget.routine;
     final isResult = r.type == RoutineType.result;
     return Scaffold(
-      appBar: AppBar(title: Text("'${r.title}' 인증")),
+      appBar: AppBar(
+          title: Text(widget.recovery
+              ? "${DateFormat('M월 d일').format(widget.day)} 인증 복구"
+              : "'${r.title}' 인증")),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
