@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <!-- 녹음 인증 (발음 연습) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- 인증 사진을 갤러리에 저장 (앱 삭제돼도 보존) — gal 패키지 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
     <!-- 걸음수 자동 검증 (Health Connect) — 1차 출시 제외(심사 서류 필요), v2에서 복원
     <uses-permission android:name="android.permission.health.READ_STEPS"/> -->
     <application

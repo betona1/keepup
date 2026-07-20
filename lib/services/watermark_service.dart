@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:gal/gal.dart';
 import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -57,6 +59,13 @@ class WatermarkService {
     final outPath =
         '${photosDir.path}/cert_${when.millisecondsSinceEpoch}.jpg';
     await File(outPath).writeAsBytes(img.encodeJpg(image, quality: 88));
+
+    // 갤러리 'KeepUp' 앨범에도 저장 — 앱을 지워도 워터마크 원본이 폰에 영구 보존됨
+    try {
+      await Gal.putImage(outPath, album: 'KeepUp');
+    } catch (e) {
+      debugPrint('갤러리 저장 실패(무시): $e'); // 권한 거부 등은 무시, 앱 내 저장은 유지
+    }
     return outPath;
   }
 }
