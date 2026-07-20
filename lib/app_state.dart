@@ -142,6 +142,43 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  /// 시작일 변경 — 지난 날짜로 소급 시작 (완료일이 최소기간 미만이면 자동 조정)
+  Future<bool> updateStartDate(String routineId, DateTime newStart) async {
+    final idx = routines.indexWhere((r) => r.id == routineId);
+    if (idx < 0) return false;
+    final r = routines[idx];
+    final ns = DateTime(newStart.year, newStart.month, newStart.day);
+    var newEnd = r.endDate;
+    final minDays = r.type == RoutineType.accumulate ? 29 : 6;
+    final minEnd = ns.add(Duration(days: minDays));
+    if (newEnd.isBefore(minEnd)) newEnd = minEnd;
+
+    routines[idx] = Routine(
+      id: r.id,
+      type: r.type,
+      title: r.title,
+      reason: r.reason,
+      dutyCycle: r.dutyCycle,
+      backupTitle: r.backupTitle,
+      targetValue: r.targetValue,
+      createdAt: r.createdAt,
+      verifyMethod: r.verifyMethod,
+      timerMinutes: r.timerMinutes,
+      targetSteps: r.targetSteps,
+      dueWeekday: r.dueWeekday,
+      mediaSource: r.mediaSource,
+      requireNote: r.requireNote,
+      windowStartMin: r.windowStartMin,
+      windowEndMin: r.windowEndMin,
+      startDate: ns,
+      endDate: newEnd,
+      changeUsedCount: r.changeUsedCount,
+    );
+    routines = [...routines];
+    await _persistAndSync();
+    return true;
+  }
+
   /// 백업 복원 — 현재 데이터를 백업 내용으로 전부 교체
   Future<void> restoreAll(
       List<Routine> newRoutines, List<Certification> newCerts) async {
@@ -154,6 +191,12 @@ class AppState extends ChangeNotifier {
 
   Future<void> addCertification(Certification c) async {
     certs = [...certs, c];
+    await _persistAndSync();
+  }
+
+  /// 인증 1건 삭제 (잘못 찍은 도장·날짜 정정용)
+  Future<void> deleteCertification(String certId) async {
+    certs = certs.where((c) => c.id != certId).toList();
     await _persistAndSync();
   }
 

@@ -626,6 +626,28 @@ class _RoutineCard extends StatelessWidget {
             ),
             const Divider(height: 1),
             ListTile(
+              leading: const Icon(Icons.event_available),
+              title: const Text('시작일 변경'),
+              subtitle: Text(
+                  '현재: ${routine.startDate.year}.${routine.startDate.month.toString().padLeft(2, '0')}.${routine.startDate.day.toString().padLeft(2, '0')}'),
+              onTap: () async {
+                Navigator.pop(context);
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: routine.startDate,
+                  firstDate: today.subtract(const Duration(days: 365)),
+                  lastDate: today,
+                  helpText: '시작일 변경 (지난 날짜로 소급 가능)',
+                );
+                if (picked != null) {
+                  await state.updateStartDate(routine.id, picked);
+                }
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
               leading: const Icon(Icons.event_repeat),
               title: const Text('완료 목표일 변경'),
               subtitle: Text(

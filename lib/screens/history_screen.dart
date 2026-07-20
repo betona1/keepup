@@ -649,14 +649,48 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                     Text(cert.memo),
                   ],
                   const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.tonalIcon(
-                      onPressed: () => ShareService.shareCertification(
-                          cert: cert, routine: routine),
-                      icon: const Icon(Icons.ios_share, size: 18),
-                      label: const Text('공유'),
-                    ),
+                  Row(
+                    children: [
+                      // 잘못 찍은 도장·날짜 정정용 삭제 (state가 있을 때만)
+                      if (widget.state != null)
+                        TextButton.icon(
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: const Text('이 인증을 삭제할까요?'),
+                                content: const Text('이 날의 도장이 사라집니다.'),
+                                actions: [
+                                  TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('취소')),
+                                  FilledButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text('삭제')),
+                                ],
+                              ),
+                            );
+                            if (ok == true) {
+                              await widget.state!
+                                  .deleteCertification(cert.id);
+                              if (context.mounted) Navigator.pop(context);
+                            }
+                          },
+                          icon: Icon(Icons.delete_outline,
+                              size: 18, color: cs.error),
+                          label: Text('인증 삭제',
+                              style: TextStyle(color: cs.error)),
+                        ),
+                      const Spacer(),
+                      FilledButton.tonalIcon(
+                        onPressed: () => ShareService.shareCertification(
+                            cert: cert, routine: routine),
+                        icon: const Icon(Icons.ios_share, size: 18),
+                        label: const Text('공유'),
+                      ),
+                    ],
                   ),
                 ],
               ),
