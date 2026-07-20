@@ -220,7 +220,10 @@ class _CertifyScreenState extends State<CertifyScreen> {
     }
   }
 
-  bool get _canSubmit => switch (_method) {
+  // 복구 모드는 증빙(사진 등)이 없어도 도장을 되살릴 수 있다
+  bool get _canSubmit =>
+      widget.recovery ||
+      switch (_method) {
         VerifyMethod.photo => _pickedPath != null,
         VerifyMethod.timer => _timerDone,
         VerifyMethod.audio => _audioPath != null && !_recording,

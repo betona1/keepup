@@ -157,6 +157,31 @@ class AppState extends ChangeNotifier {
     await _persistAndSync();
   }
 
+  /// 인증 1건의 사진 경로 교체 — 사진 유실 후 갤러리 원본으로 다시 붙이기
+  Future<void> replaceCertPhoto(String certId, String newPhotoPath) async {
+    final idx = certs.indexWhere((c) => c.id == certId);
+    if (idx < 0) return;
+    final o = certs[idx];
+    certs[idx] = Certification(
+      id: o.id,
+      routineId: o.routineId,
+      dateKey: o.dateKey,
+      photoPath: newPhotoPath,
+      memo: o.memo,
+      progressValue: o.progressValue,
+      timestamp: o.timestamp,
+      isBackup: o.isBackup,
+      verifyMethod: o.verifyMethod,
+      durationSec: o.durationSec,
+      audioPath: o.audioPath,
+      videoPath: o.videoPath,
+      steps: o.steps,
+      linkUrl: o.linkUrl,
+    );
+    certs = [...certs];
+    await _persistAndSync();
+  }
+
   // ---- 조회 헬퍼 ----
 
   /// 오늘 인증 가능한 루틴들 (결과형은 주중 내내 열림 — 마감은 일요일)

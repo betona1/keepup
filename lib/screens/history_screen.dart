@@ -6,7 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/share_service.dart';
+import '../services/watermark_service.dart';
 import '../theme.dart';
 import 'certify_screen.dart';
 import 'retro_screen.dart';
@@ -88,7 +90,7 @@ class _HistoryBodyState extends State<HistoryBody> {
                 itemBuilder: (context, i) {
                   final c = certs[i];
                   final r = state.routineById(c.routineId);
-                  return _CertTile(cert: c, routine: r);
+                  return _CertTile(cert: c, routine: r, state: state);
                 },
               ),
             ],
@@ -311,7 +313,7 @@ class _DayCell extends StatelessWidget {
       aspectRatio: 1,
       child: InkWell(
         onTap: cert != null
-            ? () => showCertDetail(context, cert!, routine)
+            ? () => showCertDetail(context, cert!, routine, state: state)
             : (missed ? () => _offerRecovery(context) : null),
         borderRadius: BorderRadius.circular(10),
         child: Container(
@@ -410,18 +412,21 @@ class _DayCell extends StatelessWidget {
 }
 
 /// 인증 상세 — 사진·검증 내용·메모·공유 (도장 달력/앨범 공용)
-void showCertDetail(
-    BuildContext context, Certification cert, Routine? routine) {
+void showCertDetail(BuildContext context, Certification cert, Routine? routine,
+    {AppState? state}) {
   showDialog(
     context: context,
-    builder: (_) => _CertDetailDialog(cert: cert, routine: routine),
+    builder: (_) =>
+        _CertDetailDialog(cert: cert, routine: routine, state: state),
   );
 }
 
 class _CertDetailDialog extends StatefulWidget {
   final Certification cert;
   final Routine? routine;
-  const _CertDetailDialog({required this.cert, required this.routine});
+  final AppState? state; // 사진 재연결용 (없으면 버튼 숨김)
+  const _CertDetailDialog(
+      {required this.cert, required this.routine, this.state});
 
   @override
   State<_CertDetailDialog> createState() => _CertDetailDialogState();
@@ -430,7 +435,32 @@ class _CertDetailDialog extends StatefulWidget {
 class _CertDetailDialogState extends State<_CertDetailDialog> {
   final _player = AudioPlayer();
   bool _playing = false;
+  bool _relinking = false;
   VideoPlayerController? _videoCtrl;
+
+  /// 갤러리 원본을 골라 이 인증에 다시 붙인다 (워터마크 재적용)
+  Future<void> _relinkPhoto() async {
+    final state = widget.state;
+    if (state == null) return;
+    setState(() => _relinking = true);
+    try {
+      final x = await ImagePicker()
+          .pickImage(source: ImageSource.gallery, imageQuality: 92, maxWidth: 2000);
+      if (x != null) {
+        final stamped =
+            await WatermarkService.stamp(x.path, widget.cert.timestamp);
+        await state.replaceCertPhoto(widget.cert.id, stamped);
+        if (mounted) {
+          Navigator.pop(context); // 갱신된 내용으로 다시 열도록 닫기
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('사진을 다시 붙였어요 ✅')),
+          );
+        }
+        return;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _relinking = false);
+  }
 
   @override
   void initState() {
@@ -475,6 +505,14 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
           children: [
             if (cert.hasPhoto && File(cert.photoPath).existsSync())
               Image.file(File(cert.photoPath)),
+            // 사진 기록은 있는데 파일이 유실됨 → 갤러리 원본으로 다시 붙이기
+            if (widget.state != null &&
+                cert.verifyMethod == 'photo' &&
+                !(cert.hasPhoto && File(cert.photoPath).existsSync()))
+              _MissingPhotoBanner(
+                busy: _relinking,
+                onPick: _relinkPhoto,
+              ),
             // 동영상 인증 재생
             if (_videoCtrl != null && _videoCtrl!.value.isInitialized)
               AspectRatio(
@@ -633,7 +671,9 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
 class _CertTile extends StatelessWidget {
   final Certification cert;
   final Routine? routine;
-  const _CertTile({required this.cert, required this.routine});
+  final AppState state;
+  const _CertTile(
+      {required this.cert, required this.routine, required this.state});
 
   @override
   Widget build(BuildContext context) {
@@ -643,7 +683,7 @@ class _CertTile extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => showCertDetail(context, cert, routine),
+        onTap: () => showCertDetail(context, cert, routine, state: state),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -691,6 +731,50 @@ class _CertTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 사진 기록은 있는데 파일이 유실됐을 때 — 갤러리 원본으로 다시 붙이기 배너
+class _MissingPhotoBanner extends StatelessWidget {
+  final bool busy;
+  final VoidCallback onPick;
+  const _MissingPhotoBanner({required this.busy, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.image_not_supported_outlined,
+              color: cs.onSurfaceVariant, size: 30),
+          const SizedBox(height: 8),
+          Text('이 인증의 사진을 찾을 수 없어요',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, color: cs.onSurface)),
+          const SizedBox(height: 4),
+          Text('갤러리(카메라 폴더)에 그날 찍은 사진이 있으면 다시 붙일 수 있어요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+          const SizedBox(height: 10),
+          FilledButton.tonalIcon(
+            onPressed: busy ? null : onPick,
+            icon: busy
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.add_photo_alternate_outlined, size: 18),
+            label: Text(busy ? '붙이는 중…' : '사진 다시 붙이기'),
+          ),
+        ],
       ),
     );
   }
