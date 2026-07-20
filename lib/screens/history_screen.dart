@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
@@ -494,11 +495,33 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                             'video' => '🎬 동영상 인증',
                             'steps' =>
                               '👟 걸음수 인증${cert.steps != null ? ' · ${cert.steps}보 확인' : ''}',
+                            'link' => '🔗 URL 인증',
                             _ => '📷 사진 인증 (날짜 워터마크)',
                           },
                           style:
                               const TextStyle(fontWeight: FontWeight.w700),
                         ),
+                        if (method == 'link' &&
+                            cert.linkUrl != null &&
+                            cert.linkUrl!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          InkWell(
+                            onTap: () => launchUrl(
+                              Uri.parse(cert.linkUrl!),
+                              mode: LaunchMode.externalApplication,
+                            ),
+                            child: Text(
+                              cert.linkUrl!,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: cs.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                         if (method == 'audio' &&
                             cert.audioPath != null &&
                             File(cert.audioPath!).existsSync()) ...[
@@ -586,7 +609,9 @@ class _CertTile extends StatelessWidget {
                                   ? Icons.mic_rounded
                                   : cert.verifyMethod == 'video'
                                       ? Icons.videocam_rounded
-                                      : cert.verifyMethod == 'steps'
+                                      : cert.verifyMethod == 'link'
+                                          ? Icons.link_rounded
+                                          : cert.verifyMethod == 'steps'
                                           ? Icons.directions_walk_rounded
                                           : Icons.image_not_supported,
                           size: 36,

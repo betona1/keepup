@@ -74,6 +74,19 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 자동 스냅샷으로 데이터를 되살렸으면 사용자에게 알린다
+    if (widget.state.restoredFromAutosave) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('이전 데이터를 자동으로 복구했어요 ✅'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      });
+    }
   }
 
   @override

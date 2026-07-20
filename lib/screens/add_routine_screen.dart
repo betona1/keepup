@@ -517,6 +517,7 @@ class _VerifyCard extends StatelessWidget {
         VerifyMethod.audio => Icons.mic_none_rounded,
         VerifyMethod.video => Icons.videocam_outlined,
         VerifyMethod.steps => Icons.directions_walk_rounded,
+        VerifyMethod.link => Icons.link_rounded,
       };
 
   @override

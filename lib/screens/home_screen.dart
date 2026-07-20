@@ -23,11 +23,17 @@ class HomeBody extends StatelessWidget {
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
 
-        final duty = state.dutyRoutinesForDay(today);
+        final canCertify = state.dutyRoutinesForDay(today);
+        // 오늘의 목표 = 오늘이 실제 의무/마감일인 루틴 (적립형 매일/주6일 + 결과형 마감일)
+        final todayDuty =
+            canCertify.where((r) => r.isDutyDay(today)).toList();
+        // 진행 중인 목표 = 결과형인데 아직 마감 전 (기간 내 미리 인증 가능, 오늘 목표엔 미포함)
+        final ongoing =
+            canCertify.where((r) => !r.isDutyDay(today)).toList();
         final resting = state.routines
             .where((r) => !r.canCertifyOn(today) && !r.isEnded(today))
             .toList();
-        final done = duty
+        final done = todayDuty
             .where((r) => state.isCertified(r.id, r.dutyKeyDate(today)))
             .length;
         final photos = state.recentPhotoCerts();
@@ -48,8 +54,8 @@ class HomeBody extends StatelessWidget {
                   )),
               _StreakCard(streak: state.dayStreak()),
               const SizedBox(height: 12),
-              if (duty.isNotEmpty) ...[
-                _DailyGoalBar(done: done, total: duty.length),
+              if (todayDuty.isNotEmpty) ...[
+                _DailyGoalBar(done: done, total: todayDuty.length),
                 const SizedBox(height: 12),
               ],
               const _QuoteCard(),
@@ -57,19 +63,42 @@ class HomeBody extends StatelessWidget {
               Text('오늘의 루틴',
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 10),
-              ...duty.map((r) => Padding(
+              ...todayDuty.map((r) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child:
                         _RoutineCard(state: state, routine: r, day: today),
                   )),
-              if (duty.isEmpty)
+              if (todayDuty.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text('오늘 인증할 루틴이 없어요. 쉬어가는 날! 🍃',
+                  child: Text('오늘 꼭 할 루틴은 없어요. 쉬어가거나 미리 해둬도 좋아요 🍃',
                       style: TextStyle(
                           color:
                               Theme.of(context).colorScheme.onSurfaceVariant)),
                 ),
+              // 진행 중인 목표 — 결과형(주1회/15일/1회성), 마감 전 미리 인증 가능
+              if (ongoing.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Text('진행 중인 목표',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(width: 6),
+                    Text('· 마감 전 언제든 인증',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ...ongoing.map((r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _RoutineCard(
+                          state: state, routine: r, day: today),
+                    )),
+              ],
               if (resting.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text('오늘은 쉬는 날',
@@ -497,6 +526,7 @@ class _RoutineCard extends StatelessWidget {
         VerifyMethod.audio => Icons.mic_none_rounded,
         VerifyMethod.video => Icons.videocam_outlined,
         VerifyMethod.steps => Icons.directions_walk_rounded,
+        VerifyMethod.link => Icons.link_rounded,
       };
 
   @override

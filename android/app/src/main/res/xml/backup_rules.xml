@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 이하 자동 백업 대상 (구글 드라이브) -->
+<full-backup-content>
+    <!-- 루틴·인증 기록 (SharedPreferences) -->
+    <include domain="sharedpref" path="." />
+    <!-- 인증 사진·녹음·영상 (앱 문서 폴더) -->
+    <include domain="file" path="." />
+</full-backup-content>

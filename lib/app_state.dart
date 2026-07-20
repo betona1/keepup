@@ -4,6 +4,7 @@ import 'models/retro_stats.dart';
 import 'models/notif_settings.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
+import 'services/autosave_service.dart';
 
 /// 앱 전역 상태. 저장소와 알림 예약을 함께 관리한다.
 class AppState extends ChangeNotifier {
@@ -14,10 +15,27 @@ class AppState extends ChangeNotifier {
   List<Certification> certs = [];
   NotifSettings notifSettings = NotifSettings.defaults;
 
+  /// 앱 시작 시 자동 스냅샷으로 복구했는지 (UI 안내용)
+  bool restoredFromAutosave = false;
+
   Future<void> load() async {
     routines = _storage.loadRoutines();
     certs = _storage.loadCerts();
     notifSettings = _storage.loadNotifSettings();
+
+    // 데이터 유실 감지: 저장소가 비었는데 자동 스냅샷이 있으면 되살린다
+    if (routines.isEmpty && certs.isEmpty) {
+      final snap = await AutosaveService.instance.restore();
+      if (snap != null) {
+        routines = snap.$1;
+        certs = snap.$2;
+        restoredFromAutosave = true;
+        // 복구분을 저장소에도 다시 기록
+        await _storage.saveRoutines(routines);
+        await _storage.saveCerts(certs);
+      }
+    }
+
     await _syncNotifications();
     notifyListeners();
   }
@@ -25,6 +43,7 @@ class AppState extends ChangeNotifier {
   Future<void> _persistAndSync() async {
     await _storage.saveRoutines(routines);
     await _storage.saveCerts(certs);
+    await AutosaveService.instance.save(routines, certs); // 자동 스냅샷
     await _syncNotifications();
     notifyListeners();
   }

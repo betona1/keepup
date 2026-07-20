@@ -17,8 +17,51 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  static const _channelId = 'habit_reminder';
-  static const _channelName = '습관 인증 알림';
+  // 알람급 채널 — 소리/진동 특성은 채널 생성 시 굳으므로, 강화하며 새 ID 사용
+  static const _channelId = 'habit_alarm_v2';
+  static const _channelName = '습관 마감 알람';
+
+  // 알람이 오래 울리도록 긴 진동 패턴 (대기, 진동, 대기, 진동…)
+  static final Int64List _vibrationPattern =
+      Int64List.fromList([0, 600, 300, 600, 300, 600, 300, 800]);
+
+  static NotificationDetails _alarmDetails() => NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          channelDescription: '습관 마감 전 인증 리마인더 (알람)',
+          importance: Importance.max,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.reminder,
+          // 알람 사용 특성 → 무음/방해금지에서도 잘 들리게
+          audioAttributesUsage: AudioAttributesUsage.alarm,
+          playSound: true,
+          enableVibration: true,
+          vibrationPattern: _vibrationPattern,
+          // insistent(무한반복) 제거 — 소리·진동은 강하게 한 번, 확인 버튼으로 끄기
+          autoCancel: true, // 탭하면 사라짐
+          ticker: '습관 인증 알림',
+          actions: const [
+            AndroidNotificationAction(
+              _actionConfirm,
+              '확인',
+              cancelNotification: true, // 확인 → 즉시 알림 종료
+            ),
+            AndroidNotificationAction(
+              _actionOpen,
+              '지금 인증하기',
+              showsUserInterface: true, // 앱 열기
+              cancelNotification: true,
+            ),
+          ],
+        ),
+        iOS: const DarwinNotificationDetails(
+          interruptionLevel: InterruptionLevel.timeSensitive,
+        ),
+      );
+
+  static const _actionConfirm = 'confirm';
+  static const _actionOpen = 'open';
 
   // 마감(23:59) 몇 분 전에 알릴지. "3시간 전부터" 요구를 3개 슬롯으로 구현.
   // 실제 사용 여부는 NotifSettings의 슬롯 on/off로 결정.
@@ -131,17 +174,26 @@ class NotificationService {
           60 => '마감 1시간 전',
           _ => '마감 30분 전',
         };
-    final body = r.isResultCycle
-        ? "'${r.title}' 마감(${dateKeyOf(day)})까지 결과를 인증해 주세요!"
-        : "'${r.title}' 오늘(${dateKeyOf(day)}) 인증하고 습관 지키기!";
+    // 이 알림 시점 기준으로 마감까지 남은 시간을 "N시간 M분"으로 명시
+    final deadline = r.deadlineOf(day);
+    final remain = deadline.difference(when);
+    final remainText = _remainLabel(remain);
     return PlannedNotice(
       when: when,
-      title: '⏰ $label · 아직 인증 안 했어요',
-      body: body,
+      title: '⏰ 오늘 습관챌린지 마감까지 $remainText 남았습니다',
+      body: "'${r.title}' 아직 인증 안 했어요. 완료하면 알람이 꺼집니다. ($label)",
       routineId: r.id,
       dateKey: dateKeyOf(day),
       isMorningReminder: customLabel != null,
     );
+  }
+
+  /// "N시간 M분" 형식 (알림 제목용)
+  static String _remainLabel(Duration d) {
+    if (d.inMinutes <= 0) return '0시간 0분';
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    return '$h시간 $m분';
   }
 
   /// [임시] 알림 동작 확인용 — 1분 뒤 테스트 알림 (실기기 테스트 끝나면 제거)
@@ -149,19 +201,10 @@ class NotificationService {
     final when = tz.TZDateTime.now(tz.local).add(const Duration(minutes: 1));
     await _plugin.zonedSchedule(
       id: 999999,
-      title: '⏰ 테스트 알림',
-      body: 'KeepUp 알림이 정상 동작합니다! (예약 1분 뒤 발사)',
+      title: '⏰ 오늘 습관챌린지 마감까지 3시간 0분 남았습니다',
+      body: '테스트 알람입니다. [확인]을 누르면 꺼져요. — KeepUp',
       scheduledDate: when,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: '습관 마감 전 인증 리마인더',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
+      notificationDetails: _alarmDetails(),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
   }
@@ -172,16 +215,7 @@ class NotificationService {
       title: n.title,
       body: n.body,
       scheduledDate: tz.TZDateTime.from(n.when, tz.local),
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: '습관 마감 전 인증 리마인더',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
+      notificationDetails: _alarmDetails(),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       // 하루 단위 반복이 아니라 개별 예약이므로 matchDateTimeComponents 미사용
     );

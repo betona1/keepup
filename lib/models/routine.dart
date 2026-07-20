@@ -25,6 +25,7 @@ enum VerifyMethod {
   audio, // 녹음 (발음 연습 등)
   video, // 동영상 (명상·운동 장면)
   steps, // 걸음수 자동 검증 (Health Connect)
+  link, // URL 인증 (스토어 등록·업로드·공유 링크 등)
 }
 
 extension RoutineTypeLabel on RoutineType {
@@ -53,6 +54,7 @@ extension VerifyMethodLabel on VerifyMethod {
         VerifyMethod.audio => '녹음 인증',
         VerifyMethod.video => '동영상 인증',
         VerifyMethod.steps => '걸음수 인증',
+        VerifyMethod.link => 'URL 인증',
       };
 
   String get description => switch (this) {
@@ -61,6 +63,7 @@ extension VerifyMethodLabel on VerifyMethod {
         VerifyMethod.audio => '음성 녹음으로 남기기 (발음 연습·낭독)',
         VerifyMethod.video => '짧은 영상으로 남기기 (명상·운동 장면)',
         VerifyMethod.steps => '오늘 걸음수를 자동으로 확인 (삼성헬스·헬스커넥트)',
+        VerifyMethod.link => '결과 웹주소로 인증 (스토어 등록·업로드·공유 링크)',
       };
 }
 
@@ -281,6 +284,7 @@ class Certification {
   final String? audioPath; // 녹음 인증: 음성 파일 경로
   final String? videoPath; // 동영상 인증: 영상 파일 경로
   final int? steps; // 걸음수 인증: 확인된 오늘 걸음수
+  final String? linkUrl; // URL 인증: 결과 웹주소
 
   Certification({
     required this.id,
@@ -296,6 +300,7 @@ class Certification {
     this.audioPath,
     this.videoPath,
     this.steps,
+    this.linkUrl,
   });
 
   bool get hasPhoto => photoPath.isNotEmpty;
@@ -314,6 +319,7 @@ class Certification {
         'audioPath': audioPath,
         'videoPath': videoPath,
         'steps': steps,
+        'linkUrl': linkUrl,
       };
 
   factory Certification.fromJson(Map<String, dynamic> j) => Certification(
@@ -330,5 +336,6 @@ class Certification {
         audioPath: j['audioPath'] as String?,
         videoPath: j['videoPath'] as String?,
         steps: (j['steps'] as num?)?.toInt(),
+        linkUrl: j['linkUrl'] as String?,
       );
 }

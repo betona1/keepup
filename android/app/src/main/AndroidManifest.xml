@@ -7,12 +7,17 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- 알람 전체화면 알림 (잠금화면/화면 꺼짐에서 크게 표시) -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <!-- 녹음 인증 (발음 연습) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- 걸음수 자동 검증 (Health Connect) -->
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <application
         android:label="KeepUp"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

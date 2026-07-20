@@ -33,6 +33,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
   final _picker = ImagePicker();
   final _memo = TextEditingController();
   final _progress = TextEditingController();
+  final _linkCtrl = TextEditingController(); // URL 인증
   String? _pickedPath;
   bool _isBackup = false;
   bool _saving = false;
@@ -106,6 +107,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
   void dispose() {
     _memo.dispose();
     _progress.dispose();
+    _linkCtrl.dispose();
     _ticker?.cancel();
     _bgm.dispose();
     _recorder.dispose();
@@ -221,7 +223,14 @@ class _CertifyScreenState extends State<CertifyScreen> {
         VerifyMethod.audio => _audioPath != null && !_recording,
         VerifyMethod.video => _videoPath != null,
         VerifyMethod.steps => _stepsDone,
+        VerifyMethod.link => _isValidLink(_linkCtrl.text),
       };
+
+  static bool _isValidLink(String s) {
+    final t = s.trim();
+    final u = Uri.tryParse(t);
+    return t.startsWith('http') && u != null && u.hasAuthority;
+  }
 
   String get _blockReason => switch (_method) {
         VerifyMethod.photo => '인증 사진을 먼저 선택해 주세요',
@@ -231,6 +240,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
         VerifyMethod.video => '인증 동영상을 먼저 촬영/선택해 주세요',
         VerifyMethod.steps =>
           '목표 ${widget.routine.targetSteps}보를 채우고 걸음수를 불러와 주세요',
+        VerifyMethod.link => '인증할 웹주소(http…)를 정확히 입력해 주세요',
       };
 
   Future<void> _submit() async {
@@ -276,6 +286,8 @@ class _CertifyScreenState extends State<CertifyScreen> {
       audioPath: _method == VerifyMethod.audio ? _audioPath : null,
       videoPath: _method == VerifyMethod.video ? _videoPath : null,
       steps: _method == VerifyMethod.steps ? _todaySteps : null,
+      linkUrl:
+          _method == VerifyMethod.link ? _linkCtrl.text.trim() : null,
     );
     await widget.state.addCertification(cert);
 
@@ -415,6 +427,17 @@ class _CertifyScreenState extends State<CertifyScreen> {
               denied: _stepsDenied,
               done: _stepsDone,
               onLoad: _loadSteps,
+            ),
+            const SizedBox(height: 16),
+            Text('인증 사진 (선택)',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+          ],
+          if (_method == VerifyMethod.link) ...[
+            _LinkBox(
+              controller: _linkCtrl,
+              valid: _isValidLink(_linkCtrl.text),
+              onChanged: () => setState(() {}),
             ),
             const SizedBox(height: 16),
             Text('인증 사진 (선택)',
@@ -702,6 +725,64 @@ class _TimerBoxState extends State<_TimerBox>
                       onPressed: widget.onReset, child: const Text('리셋')),
               ],
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// URL 인증 박스 — 결과 웹주소(스토어 등록·업로드·공유 링크) 입력
+class _LinkBox extends StatelessWidget {
+  final TextEditingController controller;
+  final bool valid;
+  final VoidCallback onChanged;
+  const _LinkBox(
+      {required this.controller,
+      required this.valid,
+      required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: valid ? AppTheme.stamp : cs.outlineVariant,
+            width: valid ? 1.6 : 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.link_rounded, size: 20, color: cs.primary),
+              const SizedBox(width: 8),
+              Text('결과 웹주소',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('스토어 등록 페이지, 업로드한 글, 공유 링크 등 결과가 담긴 URL을 붙여넣으세요.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: InputDecoration(
+              hintText: 'https://…',
+              suffixIcon: valid
+                  ? const Icon(Icons.check_circle,
+                      color: AppTheme.stamp)
+                  : (controller.text.trim().isEmpty
+                      ? null
+                      : Icon(Icons.error_outline, color: cs.error)),
+            ),
+            onChanged: (_) => onChanged(),
+          ),
         ],
       ),
     );
