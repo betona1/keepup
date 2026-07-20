@@ -535,16 +535,25 @@ class _RoutineCard extends StatelessWidget {
     // 결과형은 현재 주기 마감일 기준으로 인증·마감 계산
     final effDay = routine.dutyKeyDate(day);
     final certified = state.isCertified(routine.id, effDay);
+    // 결과형(목표형)은 한 주기에 여러 번 인증 가능 — 인증돼도 카드가 잠기지 않음
+    final locked = certified && !routine.isResultCycle;
     final deadline = routine.deadlineOf(effDay);
     final remaining = deadline.difference(DateTime.now());
     final urgent = !certified && !remaining.isNegative && remaining.inHours < 3;
     final doneDays = state.certifiedDayCount(routine.id);
     final totalDays = routine.totalDutyDays();
+    // 이번 주기 인증 횟수 (결과형 여러 번 인증 표시용)
+    final cycleCount = routine.isResultCycle
+        ? state
+            .certsForRoutine(routine.id)
+            .where((c) => c.dateKey == dateKeyOf(effDay))
+            .length
+        : 0;
 
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: certified
+        onTap: locked
             ? null
             : () => Navigator.push(
                   context,
@@ -587,22 +596,48 @@ class _RoutineCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       '$doneDays / $totalDays일'
+                      '${cycleCount > 0 ? ' · 이번 주기 $cycleCount회 인증' : ''}'
                       '${routine.hasWindow ? ' · 🌅 ${routine.windowLabel}' : ''}',
                       style: TextStyle(
                           fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                     const SizedBox(height: 6),
-                    _DeadlineChip(
-                      certified: certified,
-                      remaining: remaining,
-                      urgent: urgent,
-                    ),
+                    // 결과형은 인증돼도 "또 인증할 수 있어요" 안내
+                    (certified && routine.isResultCycle)
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppTheme.success.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text('✅ 이번 주기 인증됨 · 또 인증 가능',
+                                style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.success)),
+                          )
+                        : _DeadlineChip(
+                            certified: certified,
+                            remaining: remaining,
+                            urgent: urgent,
+                          ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              // 우측: 도장 버튼 (Stitch: STAMP / UP!)
-              StampButton(certified: certified),
+              // 우측: 도장 버튼 (Stitch: STAMP / UP!). 결과형은 인증돼도 +로 추가 인증 유도
+              (certified && routine.isResultCycle)
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const StampButton(certified: true),
+                        const SizedBox(height: 2),
+                        Icon(Icons.add_circle,
+                            size: 18, color: cs.primary),
+                      ],
+                    )
+                  : StampButton(certified: certified),
             ],
           ),
         ),
