@@ -23,6 +23,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
   bool _useWindow = false;
   TimeOfDay _windowStart = const TimeOfDay(hour: 5, minute: 0);
   TimeOfDay _windowEnd = const TimeOfDay(hour: 8, minute: 0);
+  late DateTime _startDate; // 시작일 (기본 오늘, 과거 소급 가능)
   late DateTime _endDate; // 완료 목표일 (기본 63일)
 
   final _title = TextEditingController();
@@ -37,6 +38,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
   void initState() {
     super.initState();
     final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day);
     // 기간은 본인이 설정 — 최소 30일(한 달), 초기 제안값 30일
     _endDate = DateTime(now.year, now.month, now.day)
         .add(const Duration(days: 29));
@@ -82,6 +84,7 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
           _useWindow ? _windowStart.hour * 60 + _windowStart.minute : null,
       windowEndMin:
           _useWindow ? _windowEnd.hour * 60 + _windowEnd.minute : null,
+      startDate: _startDate,
       endDate: _endDate,
     );
     await widget.state.addRoutine(r);
@@ -412,23 +415,52 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
                 style: Theme.of(context).textTheme.bodySmall),
           ],
           const SizedBox(height: 8),
-          // ── 완료 목표일 — 기본 63일 (습관이 몸에 붙는 9주) ──
-          Text('완료 목표일', style: Theme.of(context).textTheme.titleMedium),
+          // ── 시작일 — 기본 오늘, 지난 날짜로 소급 시작도 가능 ──
+          Text('시작일', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () async {
               final now = DateTime.now();
               final today = DateTime(now.year, now.month, now.day);
-              // 적립형 최소 30일~2년, 결과형 최소 1주~1년
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _startDate,
+                firstDate: today.subtract(const Duration(days: 365)),
+                lastDate: today,
+                helpText: '시작일 선택 (지난 날짜도 가능)',
+              );
+              if (picked != null) {
+                setState(() {
+                  _startDate = picked;
+                  // 종료일이 시작일보다 최소기간 미만이면 자동 조정
+                  final minEnd = picked.add(Duration(days: isAccum ? 29 : 6));
+                  if (_endDate.isBefore(minEnd)) _endDate = minEnd;
+                });
+              }
+            },
+            icon: const Icon(Icons.event_available),
+            label: Text(
+                '${_startDate.year}.${_startDate.month.toString().padLeft(2, '0')}.${_startDate.day.toString().padLeft(2, '0')}'
+                '${_startDate == DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day) ? ' (오늘)' : ''}'),
+            style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44)),
+          ),
+          const SizedBox(height: 16),
+          // ── 완료 목표일 ──
+          Text('완료 목표일', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              // 적립형 최소 30일~2년, 결과형 최소 1주~1년 (시작일 기준)
               final minDays = isAccum ? 29 : 6;
               final maxDays = isAccum ? 730 : 364;
-              final minEnd = today.add(Duration(days: minDays));
+              final minEnd = _startDate.add(Duration(days: minDays));
               final picked = await showDatePicker(
                 context: context,
                 initialDate:
                     _endDate.isBefore(minEnd) ? minEnd : _endDate,
                 firstDate: minEnd,
-                lastDate: today.add(Duration(days: maxDays)),
+                lastDate: _startDate.add(Duration(days: maxDays)),
                 helpText: isAccum
                     ? '완료 목표일 선택 (최소 30일)'
                     : '완료 목표일 선택 (최소 1주 ~ 최대 1년)',
