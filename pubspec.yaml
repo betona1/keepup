@@ -1,7 +1,7 @@
 name: keepup
 description: 혼자 쓰는 습관 챌린지 인증 앱 (적립형/결과형 + 마감 3시간 전 알림)
 publish_to: 'none'
-version: 1.0.1+6
+version: 1.1.0+7
 
 environment:
   sdk: '>=3.4.0 <4.0.0'   # Flutter 3.22+ (Material3 surfaceContainer 색상 토큰 사용)
@@ -83,6 +83,6 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: assets/icon/icon.png
-  adaptive_icon_background: "#274ED5"
+  adaptive_icon_background: assets/icon/icon_bg.png
   adaptive_icon_foreground: assets/icon/icon_fg.png
   remove_alpha_ios: true
