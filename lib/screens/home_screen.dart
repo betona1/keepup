@@ -204,15 +204,7 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
 
   Future<void> _onTap() async {
     if (_account == null) {
-      // 크롬 Custom Tab으로 로그인 (WebView 아님 → 구글 OAuth 정상)
-      final ok = await AccountService.instance.login();
-      if (ok) {
-        await _refresh();
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('로그인이 취소됐어요.')),
-        );
-      }
+      await _showLoginChooser();
       return;
     }
     // 로그인 상태 → 계정 시트
@@ -244,6 +236,77 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
         ),
       ),
     );
+  }
+
+  /// 로그인 방법 선택 시트 — 기기 구글계정 원탭 / 브라우저(카카오·네이버·이메일)
+  Future<void> _showLoginChooser() async {
+    final cs = Theme.of(context).colorScheme;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('로그인',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('성과 게시판에 자랑할 때만 로그인해요. 앱은 로그인 없이도 완전 동작해요.',
+                    style: TextStyle(
+                        fontSize: 12.5, color: cs.onSurfaceVariant)),
+              ),
+            ),
+            ListTile(
+              leading: Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: cs.outlineVariant),
+                ),
+                child: const Text('G',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: Color(0xFF4285F4))),
+              ),
+              title: const Text('Google 계정으로 로그인'),
+              subtitle: const Text('이 기기 계정으로 바로 · 비밀번호 불필요'),
+              onTap: () => Navigator.pop(ctx, 'google'),
+            ),
+            ListTile(
+              leading: Icon(Icons.public, color: cs.primary),
+              title: const Text('카카오 · 네이버 · 이메일'),
+              subtitle: const Text('브라우저로 로그인'),
+              onTap: () => Navigator.pop(ctx, 'web'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final ok = choice == 'google'
+        ? await AccountService.instance.loginWithGoogleNative()
+        : await AccountService.instance.login();
+    if (ok) {
+      await _refresh();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인이 취소됐거나 실패했어요. 다시 시도해 주세요.')),
+      );
+    }
   }
 
   Widget _avatarCircle(double size) {

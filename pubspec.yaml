@@ -1,7 +1,7 @@
 name: keepup
 description: 혼자 쓰는 습관 챌린지 인증 앱 (적립형/결과형 + 마감 3시간 전 알림)
 publish_to: 'none'
-version: 1.1.1+9
+version: 1.1.2+10
 
 environment:
   sdk: '>=3.4.0 <4.0.0'   # Flutter 3.22+ (Material3 surfaceContainer 색상 토큰 사용)
@@ -56,6 +56,7 @@ dependencies:
   # 인증 사진을 갤러리에도 저장 (앱 삭제돼도 원본 워터마크 사진 보존)
   gal: ^2.3.0
   flutter_web_auth_2: ^5.0.3
+  google_sign_in: 6.2.2
 
 dev_dependencies:
   flutter_test:

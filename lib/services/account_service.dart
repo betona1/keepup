@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,6 +25,9 @@ class AccountService {
 
   static const _base = 'https://keywordream.com';
   static const _prefsKey = 'web_session_token_v1';
+  // keywordream 웹 OAuth 클라이언트 ID (네이티브 구글 로그인 idToken의 audience)
+  static const _webClientId =
+      '680970860549-u3bmanu3mvgnj9iontelgits0ha4pm2s.apps.googleusercontent.com';
 
   String? _token;
   WebAccount? _cached;
@@ -64,6 +68,43 @@ class AccountService {
       }
     } catch (_) {
       // 사용자가 취소했거나 실패 — 조용히 무시
+    }
+    return false;
+  }
+
+  /// 기기 구글계정으로 '원탭' 로그인 (네이티브 — 브라우저·비밀번호 불필요).
+  /// google_sign_in으로 받은 idToken을 서버에 보내 앱 세션 토큰으로 교환한다.
+  /// 성공 true / 취소·실패 false.
+  Future<bool> loginWithGoogleNative() async {
+    final gsi = GoogleSignIn(
+      serverClientId: _webClientId,
+      scopes: const ['email', 'profile'],
+    );
+    try {
+      // 이전 세션이 남아 있으면 계정 선택이 매끄럽도록 정리
+      await gsi.signOut();
+      final account = await gsi.signIn();
+      if (account == null) return false; // 사용자 취소
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null || idToken.isEmpty) return false;
+
+      final res = await http
+          .post(
+            Uri.parse('$_base/api/auth/google/native'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'idToken': idToken}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return false;
+      final body = jsonDecode(utf8.decode(res.bodyBytes));
+      final token = body?['data']?['token'] as String?;
+      if (token != null && token.isNotEmpty) {
+        await saveToken(token);
+        return true;
+      }
+    } catch (_) {
+      // DEVELOPER_ERROR(SHA-1 미등록 등)·취소·네트워크 실패 — 조용히 무시
     }
     return false;
   }
