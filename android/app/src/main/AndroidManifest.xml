@@ -17,7 +17,7 @@
     <!-- 걸음수 자동 검증 (Health Connect) — 1차 출시 제외(심사 서류 필요), v2에서 복원
     <uses-permission android:name="android.permission.health.READ_STEPS"/> -->
     <application
-        android:label="Log Challenge"
+        android:label="@string/app_name"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"

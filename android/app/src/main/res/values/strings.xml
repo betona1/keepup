@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 기본(한국 등): 런처 이름 -->
+    <string name="app_name">로그챌린지</string>
+</resources>
