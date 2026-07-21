@@ -1,10 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- 명언 갱신·웹 계정 로그인 (릴리스 빌드에는 기본 포함 안 되므로 명시 필수) -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- 마감 전 로컬 알림 (flutter_local_notifications) 필수 권한 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- USE_EXACT_ALARM(자동승인·제한됨)은 알람시계/통화 앱 전용 → 습관 리마인더엔 부적합.
+         제거하고 SCHEDULE_EXACT_ALARM(사용자 동의형)만 사용. flutter_local_notifications가
+         병합해 넣더라도 강제 제거. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" tools:node="remove"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- 알람 전체화면 알림 (잠금화면/화면 꺼짐에서 크게 표시) -->
