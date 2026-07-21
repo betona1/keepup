@@ -221,3 +221,55 @@ class StampButton extends StatelessWidget {
     );
   }
 }
+
+/// 앱 상단 로고 — 도장 마크 + 'Log Challenge' 워드마크
+class AppLogo extends StatelessWidget {
+  final double height;
+  const AppLogo({super.key, this.height = 30});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 미니 도장 링
+        Transform.rotate(
+          angle: -0.14,
+          child: Container(
+            width: height,
+            height: height,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.stamp, width: height * 0.1),
+            ),
+            alignment: Alignment.center,
+            child: Text('UP',
+                style: TextStyle(
+                  color: AppTheme.stamp,
+                  fontWeight: FontWeight.w800,
+                  fontSize: height * 0.32,
+                  height: 1,
+                )),
+          ),
+        ),
+        const SizedBox(width: 9),
+        // 워드마크: Log(도장색) + Challenge(브랜드 블루)
+        RichText(
+          text: TextSpan(
+            style: TextStyle(
+              fontFamily: 'NanumGothic',
+              fontWeight: FontWeight.w800,
+              fontSize: height * 0.66,
+              letterSpacing: -0.3,
+            ),
+            children: [
+              TextSpan(text: 'Log', style: TextStyle(color: AppTheme.stamp)),
+              TextSpan(text: 'Challenge', style: TextStyle(color: cs.primary)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

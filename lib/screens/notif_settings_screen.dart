@@ -47,7 +47,8 @@ class _NotifSettingsScreenState extends State<NotifSettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('알림 설정')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: EdgeInsets.fromLTRB(
+            16, 8, 16, 32 + MediaQuery.of(context).viewPadding.bottom),
         children: [
           _sectionLabel(context, '아침 리마인더'),
           Card(

@@ -115,8 +115,10 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
     final isAccum = _type == RoutineType.accumulate;
     return Scaffold(
       appBar: AppBar(title: const Text('루틴 선언')),
+      // 하단 시스템 네비게이션 바에 '선언하고 시작' 버튼이 가리지 않도록 여백 확보
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+            16, 16, 16, 16 + MediaQuery.of(context).viewPadding.bottom + 24),
         children: [
           Text('유형', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),

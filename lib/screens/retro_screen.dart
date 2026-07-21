@@ -71,7 +71,8 @@ class _RetroScreenState extends State<RetroScreen> {
         title: Text(_stats.ended ? '시즌 회고 카드' : '중간 회고 카드'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: EdgeInsets.fromLTRB(
+            16, 8, 16, 24 + MediaQuery.of(context).viewPadding.bottom),
         child: Column(
           children: [
             Center(

@@ -13,9 +13,13 @@ import '../models/routine.dart';
 import '../services/watermark_service.dart';
 import '../services/share_service.dart';
 import '../services/steps_service.dart';
+import '../services/timer_service.dart';
 import '../theme.dart';
 
 class CertifyScreen extends StatefulWidget {
+  // 현재 열려 있는 인증 화면 수 — 타이머 완료 시 중복 이동을 막는 데 쓴다
+  static int openCount = 0;
+
   final AppState state;
   final Routine routine;
   final DateTime day;
@@ -42,11 +46,14 @@ class _CertifyScreenState extends State<CertifyScreen> {
   bool _saving = false;
 
   // 타이머 인증 (+ 명상 모드 배경 음악)
-  Timer? _ticker;
-  int _elapsedSec = 0;
-  bool _running = false;
+  // 경과 시간은 TimerService가 '시작 시각' 기준으로 관리한다 →
+  // 다른 화면으로 가거나 앱이 잠들어도 달리기·명상 시간이 계속 흐른다.
+  final _ts = TimerService.instance;
   final _bgm = AudioPlayer()..setReleaseMode(ReleaseMode.loop);
+  int get _elapsedSec => _ts.elapsedFor(widget.routine.id);
+  bool get _running => _ts.isActiveFor(widget.routine.id) && _ts.running;
   bool get _timerDone =>
+      _method == VerifyMethod.timer &&
       _elapsedSec >= widget.routine.timerMinutes * 60;
 
   Future<void> _bgmPlay() async {
@@ -98,20 +105,52 @@ class _CertifyScreenState extends State<CertifyScreen> {
 
   VerifyMethod get _method => widget.routine.verifyMethod;
 
+  bool _autoStamped = false; // 타이머 완료 자동 도장 중복 방지
+
   @override
   void initState() {
     super.initState();
+    CertifyScreen.openCount++;
     _player.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playing = false);
     });
+    if (_method == VerifyMethod.timer) {
+      _ts.addListener(_onTimerTick);
+      // 백그라운드에서 이미 목표를 채운 채 들어왔다면 바로 도장
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoStamp());
+    }
+  }
+
+  /// 타이머가 1초마다 알림 → 화면 갱신 + 완료 시 자동 도장
+  void _onTimerTick() {
+    if (!mounted) return;
+    setState(() {});
+    if (_timerDone) {
+      _bgm.stop();
+      _maybeAutoStamp();
+    }
+  }
+
+  /// 목표 시간을 채웠고 조건이 맞으면 자동으로 도장을 찍는다.
+  /// (소감 필수 루틴은 사용자가 직접 적어야 하므로 자동 도장 없이 대기)
+  void _maybeAutoStamp() {
+    if (_autoStamped || _saving || !mounted) return;
+    if (_method != VerifyMethod.timer || !_timerDone) return;
+    if (widget.routine.requireNote && _memo.text.trim().isEmpty) return;
+    if (!widget.recovery && !widget.routine.isWithinWindow(DateTime.now())) {
+      return;
+    }
+    _autoStamped = true;
+    _submit();
   }
 
   @override
   void dispose() {
+    CertifyScreen.openCount--;
+    if (_method == VerifyMethod.timer) _ts.removeListener(_onTimerTick);
     _memo.dispose();
     _progress.dispose();
     _linkCtrl.dispose();
-    _ticker?.cancel();
     _bgm.dispose();
     _recorder.dispose();
     _player.dispose();
@@ -149,35 +188,22 @@ class _CertifyScreenState extends State<CertifyScreen> {
     if (x != null) setState(() => _pickedPath = x.path);
   }
 
-  // ── 타이머 ──
-  void _toggleTimer() {
-    if (_running) {
-      _ticker?.cancel();
-      _bgm.pause();
-      setState(() => _running = false);
+  // ── 타이머 (TimerService가 시간 계산·지속을 담당) ──
+  Future<void> _toggleTimer() async {
+    final wasRunning = _running;
+    await _ts.toggle(widget.routine, widget.day);
+    if (wasRunning) {
+      await _bgm.pause();
     } else {
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-        setState(() {
-          _elapsedSec++;
-          if (_timerDone && _running) {
-            _ticker?.cancel();
-            _running = false;
-            _bgm.stop();
-          }
-        });
-      });
       _bgmPlay();
-      setState(() => _running = true);
     }
+    if (mounted) setState(() {});
   }
 
-  void _resetTimer() {
-    _ticker?.cancel();
-    _bgm.stop();
-    setState(() {
-      _running = false;
-      _elapsedSec = 0;
-    });
+  Future<void> _resetTimer() async {
+    await _ts.reset();
+    await _bgm.stop();
+    if (mounted) setState(() {});
   }
 
   // ── 녹음 ──
@@ -301,6 +327,10 @@ class _CertifyScreenState extends State<CertifyScreen> {
           _method == VerifyMethod.link ? _linkCtrl.text.trim() : null,
     );
     await widget.state.addCertification(cert);
+    // 타이머 인증이 끝났으면 세션을 정리 (다음에 새로 시작)
+    if (_method == VerifyMethod.timer && _ts.isActiveFor(widget.routine.id)) {
+      await _ts.reset();
+    }
 
     if (!mounted) return;
     setState(() => _saving = false);
@@ -362,8 +392,10 @@ class _CertifyScreenState extends State<CertifyScreen> {
           title: Text(widget.recovery
               ? "${DateFormat('M월 d일').format(widget.day)} 인증 복구"
               : "'${r.title}' 인증")),
+      // 하단 시스템 네비게이션 바(◁ ○ ▤)에 '도장 찍기' 버튼이 가리지 않도록 여백 확보
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+            16, 16, 16, 16 + MediaQuery.of(context).viewPadding.bottom + 24),
         children: [
           // 인증 시간대 안내 배너
           if (r.hasWindow) ...[

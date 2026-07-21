@@ -238,6 +238,32 @@ class NotificationService {
     );
   }
 
+  // 타이머 완료 알림 전용 ID (백그라운드에서 목표 시간을 채우면 울림)
+  static const int _timerDoneId = 999998;
+
+  /// 타이머가 [when]에 목표를 채우면 울릴 완료 알림을 예약한다.
+  /// 앱이 꺼져 있어도 이 알림을 눌러 인증 화면으로 올 수 있다.
+  Future<void> scheduleTimerDone(DateTime when, String title) async {
+    try {
+      await _plugin.zonedSchedule(
+        id: _timerDoneId,
+        title: '⏱️ \'$title\' 목표 시간 완료!',
+        body: '목표 시간을 다 채웠어요. 눌러서 도장을 찍으세요 🎉',
+        scheduledDate: tz.TZDateTime.from(when, tz.local),
+        notificationDetails: _alarmDetails(),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (e) {
+      debugPrint('타이머 완료 알림 예약 실패(무시): $e');
+    }
+  }
+
+  Future<void> cancelTimerDone() async {
+    try {
+      await _plugin.cancel(id: _timerDoneId);
+    } catch (_) {/* 무시 */}
+  }
+
   Future<void> _scheduleOne(int id, PlannedNotice n) async {
     await _plugin.zonedSchedule(
       id: id,

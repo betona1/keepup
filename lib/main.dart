@@ -8,8 +8,9 @@ import 'app_state.dart';
 import 'theme.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
+import 'services/timer_service.dart';
 import 'screens/home_screen.dart';
-import 'widgets/marquee_text.dart';
+import 'screens/certify_screen.dart';
 import 'services/backup_service.dart';
 import 'screens/history_screen.dart';
 import 'screens/add_routine_screen.dart';
@@ -35,6 +36,9 @@ Future<void> main() async {
   final storage = await StorageService.create();
   final state = AppState(storage);
   await state.load();
+
+  // 진행 중이던 타이머 세션 복원 (앱을 껐다 켜도 달리기·명상 시간이 이어짐)
+  await TimerService.instance.load();
 
   // 알림 권한 요청 (첫 실행 시)
   await NotificationService.instance.requestPermissions();
@@ -74,6 +78,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 타이머가 목표를 채우면 인증 화면으로 이동해 자동으로 도장을 찍는다
+    TimerService.instance.onComplete = _onTimerComplete;
     // 자동 스냅샷으로 데이터를 되살렸으면 사용자에게 알린다
     if (widget.state.restoredFromAutosave) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -99,11 +105,31 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState s) {
     // 앱을 다시 열 때 알림 상태를 최신으로 재동기화
     if (s == AppLifecycleState.resumed) {
-      NotificationService.instance.reconcile(
-          widget.state.routines,
-          widget.state.certs,
-          widget.state.notifSettings);
+      NotificationService.instance
+          .reconcile(widget.state.routines, widget.state.certs,
+              widget.state.notifSettings)
+          // reconcile의 cancelAll이 타이머 완료 알림을 지웠을 수 있어 다시 건다
+          .then((_) => TimerService.instance.rearmNotification());
+      // 백그라운드에서 타이머가 목표를 채웠는지 점검 → 완료면 자동 도장
+      TimerService.instance.checkCompletion();
     }
+  }
+
+  /// 타이머 완료 콜백 — 인증 화면이 이미 떠 있으면 그 화면이 처리하므로 건너뛴다.
+  void _onTimerComplete(String routineId, DateTime day) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || CertifyScreen.openCount > 0) return;
+      final matches =
+          widget.state.routines.where((r) => r.id == routineId);
+      if (matches.isEmpty) return;
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => CertifyScreen(
+          state: widget.state,
+          routine: matches.first,
+          day: day,
+        ),
+      ));
+    });
   }
 
   Future<void> _exportBackup() async {
@@ -166,33 +192,7 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 66,
-        title: _index == 0
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(titles[0]),
-                  // 내가 선언한 습관들이 전광판처럼 흐른다
-                  ListenableBuilder(
-                    listenable: widget.state,
-                    builder: (context, _) {
-                      final names = widget.state.routines
-                          .map((r) => r.title)
-                          .join('  ·  ');
-                      if (names.isEmpty) return const SizedBox.shrink();
-                      return MarqueeText(
-                        text: names,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              )
-            : Text(titles[_index]),
+        title: _index == 0 ? const AppLogo(height: 32) : Text(titles[_index]),
         actions: [
           // 알림 설정 (아침 리마인더 시각 · 마감 임박 슬롯 · 테스트 알림)
           IconButton(

@@ -6,6 +6,7 @@ import '../models/routine.dart';
 import '../services/account_service.dart';
 import '../services/quote_service.dart';
 import '../theme.dart';
+import '../widgets/marquee_text.dart';
 import 'certify_screen.dart';
 import 'history_screen.dart' show showCertDetail;
 import 'retro_screen.dart';
@@ -33,6 +34,10 @@ class HomeBody extends StatelessWidget {
         final resting = state.routines
             .where((r) => !r.canCertifyOn(today) && !r.isEnded(today))
             .toList();
+        // 결과형 목표 — 잊지 않도록 상단에 전광판처럼 흐른다
+        final resultGoals = state.routines
+            .where((r) => r.isResultCycle && !r.isEnded(today))
+            .toList();
         final done = todayDuty
             .where((r) => state.isCertified(r.id, r.dutyKeyDate(today)))
             .length;
@@ -56,6 +61,10 @@ class HomeBody extends StatelessWidget {
               const SizedBox(height: 12),
               if (todayDuty.isNotEmpty) ...[
                 _DailyGoalBar(done: done, total: todayDuty.length),
+                const SizedBox(height: 12),
+              ],
+              if (resultGoals.isNotEmpty) ...[
+                _ResultGoalMarquee(goals: resultGoals, today: today),
                 const SizedBox(height: 12),
               ],
               const _QuoteCard(),
@@ -446,6 +455,51 @@ class _DailyGoalBar extends StatelessWidget {
           style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
         ),
       ],
+    );
+  }
+}
+
+/// 결과형 목표 전광판 — "1주일에 1개 앱 만들기" 처럼 선언한 목표가 흘러가
+/// 잊지 않도록 상단에 항상 떠 있다. (기획서: 결과형 등록분 리마인더)
+class _ResultGoalMarquee extends StatelessWidget {
+  final List<Routine> goals;
+  final DateTime today;
+  const _ResultGoalMarquee({required this.goals, required this.today});
+
+  @override
+  Widget build(BuildContext context) {
+    // 각 목표를 "🎯 제목 · D-n" 형태로, 임박할수록 눈에 띄게
+    final parts = goals.map((r) {
+      final due = r.dutyKeyDate(today);
+      final dLeft = due.difference(today).inDays;
+      final dTag = dLeft <= 0 ? '오늘 마감' : 'D-$dLeft';
+      return '🎯 ${r.title} · $dTag';
+    }).join('        ');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppTheme.stampSoft.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.stamp.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.flag_rounded, size: 17, color: AppTheme.stamp),
+          const SizedBox(width: 8),
+          Expanded(
+            child: MarqueeText(
+              text: parts,
+              speed: 30,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.stamp,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

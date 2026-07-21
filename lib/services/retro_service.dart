@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/retro_stats.dart';
+import 'share_service.dart';
 
 /// 회고 카드를 이미지로 굽고 OS 공유 시트로 내보낸다.
 /// (사용자가 카톡 오픈채팅방 등 대상을 직접 고른다 — 기획서 3.3)
@@ -65,7 +66,7 @@ class RetroService {
           ' · 최장 연속 ${stats.longestStreak}일');
     final tally = stats.tallyLabel;
     if (tally != null) b.writeln(tally);
-    b.write('#KeepUp');
+    b.write('———\n📱 습관 인증 챌린지 앱 「Log Challenge」 👉 ${ShareService.appLink}');
     return b.toString();
   }
 }
