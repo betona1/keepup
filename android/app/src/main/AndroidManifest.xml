@@ -49,6 +49,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- flutter_web_auth_2 콜백 — 크롬 Custom Tab에서 로그인 후 logchallenge:// 스킴으로 앱 복귀 -->
+        <activity
+            android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
+            android:exported="true">
+            <intent-filter android:label="flutter_web_auth_2">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="logchallenge"/>
+            </intent-filter>
+        </activity>
         <!-- Health Connect 관련 — 1차 출시 제외, v2 걸음수 기능과 함께 복원
         <activity-alias
             android:name="ViewPermissionUsageActivity"
@@ -92,6 +103,12 @@
         <!-- Android 11+ 패키지 가시성: image_picker 카메라 촬영 -->
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE"/>
+        </intent>
+        <!-- Custom Tab/브라우저 가시성 (flutter_web_auth_2 로그인) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <category android:name="android.intent.category.BROWSABLE"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

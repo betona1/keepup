@@ -10,7 +10,6 @@ import '../widgets/marquee_text.dart';
 import 'certify_screen.dart';
 import 'history_screen.dart' show showCertDetail;
 import 'retro_screen.dart';
-import 'web_login_screen.dart';
 
 class HomeBody extends StatelessWidget {
   final AppState state;
@@ -205,11 +204,15 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
 
   Future<void> _onTap() async {
     if (_account == null) {
-      final ok = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(builder: (_) => const WebLoginScreen()),
-      );
-      if (ok == true) await _refresh();
+      // 크롬 Custom Tab으로 로그인 (WebView 아님 → 구글 OAuth 정상)
+      final ok = await AccountService.instance.login();
+      if (ok) {
+        await _refresh();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('로그인이 취소됐어요.')),
+        );
+      }
       return;
     }
     // 로그인 상태 → 계정 시트
