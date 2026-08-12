@@ -370,8 +370,8 @@ class NotificationService {
     var streak = 0;
     var d = day.subtract(const Duration(days: 1));
     while (!d.isBefore(r.startDate)) {
-      // 미래(아직 지나지 않은 날)는 판정 대상 아님
-      if (!d.isAfter(today) && r.isDutyDay(d)) {
+      // '놓쳤다'는 마감이 지난 날만 — 오늘은 아직 인증 기회가 남아 있으므로 제외
+      if (d.isBefore(today) && r.isDutyDay(d)) {
         if (certifiedKeys.contains('${r.id}|${dateKeyOf(d)}')) break;
         streak++;
         if (streak >= 5) break;
@@ -613,18 +613,26 @@ class NotificationService {
         usingSystemAlarmSound: false,
       );
     }
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    // 진단은 어디까지나 참고 정보 — 플러그인이 준비 안 된 환경(테스트 등)에서도
+    // 화면이 죽지 않도록 조회 전체를 감싼다.
+    var notifOk = true;
+    var exactOk = true;
     var pending = 0;
     try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      notifOk = await android?.areNotificationsEnabled() ?? true;
+      exactOk = await android?.canScheduleExactNotifications() ?? true;
       // 마감 알람 슬롯만 센다 (잔여 알림·테스트·타이머 등 보조 예약은 제외)
       pending = (await _plugin.pendingNotificationRequests())
           .where((r) => r.id >= 1 && r.id <= _maxPending)
           .length;
-    } catch (_) {/* 조회 실패는 0으로 */}
+    } catch (e) {
+      debugPrint('알람 진단 실패(무시): $e');
+    }
     return AlarmStatus(
-      notificationsAllowed: await android?.areNotificationsEnabled() ?? true,
-      exactAlarmAllowed: await android?.canScheduleExactNotifications() ?? true,
+      notificationsAllowed: notifOk,
+      exactAlarmAllowed: exactOk,
       pendingCount: pending,
       usingSystemAlarmSound: _customSoundOk,
     );

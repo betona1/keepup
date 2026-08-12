@@ -11,6 +11,8 @@ void main() {
   // 기준 시각을 고정 — 오늘 정오 (임박 알림이 아직 미래가 되도록)
   final now = DateTime(2026, 1, 5, 12, 0); // 2026-01-05는 월요일
 
+  // 시작일 = 오늘 — 지난 의무일이 없어 '놓칠수록 알람 증가' 보정이 붙지 않는
+  // 기준 상태. (누적 실패 에스컬레이션은 planNotices의 별도 관심사)
   Routine dailyPhoto() => Routine(
         id: 'acc',
         type: RoutineType.accumulate,
@@ -19,7 +21,7 @@ void main() {
         dutyCycle: DutyCycle.everyday,
         createdAt: now,
         verifyMethod: VerifyMethod.photo,
-        startDate: DateTime(2026, 1, 1),
+        startDate: DateTime(2026, 1, 5),
         endDate: DateTime(2026, 3, 1),
       );
 
@@ -54,7 +56,7 @@ void main() {
           .where((n) => n.dateKey == '2026-01-05' && !n.isMorningReminder)
           .toList();
       expect(today.length, 1);
-      expect(today.single.title, contains('30분 전'));
+      expect(today.single.body, contains('마감 30분 전'));
     });
 
     test('슬롯을 모두 끄면 적립형은 예약이 하나도 없다', () {

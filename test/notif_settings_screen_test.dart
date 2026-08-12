@@ -26,6 +26,10 @@ void main() {
   });
 
   testWidgets('마감 3시간 전 스위치를 끄면 설정에 저장된다', (tester) async {
+    // 자가진단 카드가 추가돼 화면이 길어졌다 — 스크롤 없이 다 보이게 키운다
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     final storage = _FakeStorage();
     final state = AppState(storage);
 
@@ -51,6 +55,9 @@ void main() {
   });
 
   testWidgets('모든 임박 슬롯을 끄면 경고 문구가 뜬다', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     final state = AppState(_FakeStorage());
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.light(),
