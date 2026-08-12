@@ -7,6 +7,7 @@ import '../models/routine.dart';
 import '../services/media_store.dart';
 import '../services/retro_service.dart';
 import '../services/web_board_service.dart';
+import '../widgets/board_share_dialog.dart';
 import '../widgets/login_sheet.dart';
 import '../widgets/retro_card.dart';
 
@@ -78,74 +79,15 @@ class _RetroScreenState extends State<RetroScreen> {
     if (!mounted) return;
 
     final r = _stats.routine;
-    final draft = await showDialog<(String, String)>(
-      context: context,
-      builder: (ctx) {
-        final titleCtrl = TextEditingController(
-            text: _stats.ended
-                ? '${r.title} — ${_stats.certifiedDays}일 도장 완주!'
-                : '${r.title} — ${_stats.certifiedDays}일째 도장 찍는 중');
-        final bodyCtrl = TextEditingController(
-            text: '달성률 ${_stats.percent}% · 도장 ${_stats.certifiedDays}/'
-                '${_stats.totalDutyDays}일 · 최장 연속 ${_stats.longestStreak}일'
-                '${_stats.tallyLabel != null ? '\n${_stats.tallyLabel}' : ''}'
-                '\n\n');
-        return AlertDialog(
-          title: const Text('웹 게시판에 자랑하기'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleCtrl,
-                  maxLength: 80,
-                  decoration: const InputDecoration(labelText: '제목'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: bodyCtrl,
-                  maxLines: 6,
-                  decoration: const InputDecoration(
-                    labelText: '소감',
-                    hintText: '이 시즌을 지나며 느낀 점을 남겨보세요',
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Icon(Icons.image_outlined,
-                        size: 16,
-                        color: Theme.of(ctx).colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text('회고 카드 이미지가 함께 올라가요',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color:
-                                  Theme.of(ctx).colorScheme.onSurfaceVariant)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
-            FilledButton(
-              onPressed: () {
-                if (titleCtrl.text.trim().isEmpty ||
-                    bodyCtrl.text.trim().isEmpty) {
-                  return;
-                }
-                Navigator.pop(
-                    ctx, (titleCtrl.text.trim(), bodyCtrl.text.trim()));
-              },
-              child: const Text('게시하기'),
-            ),
-          ],
-        );
-      },
+    final draft = await promptBoardPost(
+      context,
+      title: _stats.ended
+          ? '${r.title} — ${_stats.certifiedDays}일 도장 완주!'
+          : '${r.title} — ${_stats.certifiedDays}일째 도장 찍는 중',
+      body: '달성률 ${_stats.percent}% · 도장 ${_stats.certifiedDays}/'
+          '${_stats.totalDutyDays}일 · 최장 연속 ${_stats.longestStreak}일'
+          '${_stats.tallyLabel != null ? '\n${_stats.tallyLabel}' : ''}'
+          '\n\n',
     );
     if (draft == null || !mounted) return;
 
@@ -156,7 +98,9 @@ class _RetroScreenState extends State<RetroScreen> {
         stats: _stats,
         title: draft.$1,
         body: draft.$2,
-        cardPng: png,
+        imageBytes: png,
+        imageMime: 'image/png',
+        imageName: 'retro_card.png',
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

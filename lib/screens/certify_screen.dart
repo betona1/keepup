@@ -12,11 +12,15 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
+import '../services/media_store.dart';
 import '../services/watermark_service.dart';
 import '../services/share_service.dart';
 import '../services/steps_service.dart';
 import '../services/timer_service.dart';
+import '../services/web_board_service.dart';
 import '../theme.dart';
+import '../widgets/board_share_dialog.dart';
+import '../widgets/login_sheet.dart';
 
 class CertifyScreen extends StatefulWidget {
   // 현재 열려 있는 인증 화면 수 — 타이머 완료 시 중복 이동을 막는 데 쓴다
@@ -355,7 +359,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
   }
 
   Future<void> _offerShare(Certification cert) async {
-    await showModalBottomSheet(
+    final action = await showModalBottomSheet<String>(
       context: context,
       builder: (sheetCtx) => SafeArea(
         child: Padding(
@@ -377,7 +381,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              const Text('카카오톡 오픈채팅방 등에 공유할까요?\n(공유 시트에서 방을 직접 골라 전송하면 됩니다)',
+              const Text('오늘의 인증을 자랑해 볼까요?',
                   style: TextStyle(fontSize: 13)),
               const SizedBox(height: 16),
               FilledButton.icon(
@@ -387,10 +391,21 @@ class _CertifyScreenState extends State<CertifyScreen> {
                   if (sheetCtx.mounted) Navigator.pop(sheetCtx);
                 },
                 icon: const Icon(Icons.ios_share),
-                label: const Text('공유하기'),
+                label: const Text('카톡 등으로 공유하기'),
                 style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(48)),
               ),
+              // 베타 커뮤니티: 매일 인증을 성과 게시판에 올려 서로 응원 (앱 전용)
+              if (!kIsWeb) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(sheetCtx, 'board'),
+                  icon: const Icon(Icons.emoji_events_outlined, size: 18),
+                  label: const Text('웹 게시판에 자랑하기'),
+                  style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48)),
+                ),
+              ],
               TextButton(
                 onPressed: () => Navigator.pop(sheetCtx),
                 child: const Text('나중에'),
@@ -400,6 +415,66 @@ class _CertifyScreenState extends State<CertifyScreen> {
         ),
       ),
     );
+    // 게시판 업로드는 시트가 닫힌 뒤, 화면이 살아 있는 동안 진행한다
+    if (action == 'board' && mounted) {
+      await _shareToBoard(cert);
+    }
+  }
+
+  /// 오늘의 인증을 웹 성과 게시판에 올린다 (사진 첨부, 로그인 필요)
+  Future<void> _shareToBoard(Certification cert) async {
+    if (!await ensureWebLogin(context,
+        reason: '인증을 게시판에 올리려면 로그인이 필요해요.')) {
+      return;
+    }
+    if (!mounted) return;
+
+    final r = widget.routine;
+    final stats = widget.state.retroStatsFor(r.id);
+    final draft = await promptBoardPost(
+      context,
+      title: "${r.title} — ${stats.certifiedDays}일차 도장 쾅!",
+      body: [
+        if (cert.memo.isNotEmpty) cert.memo,
+        if (cert.progressValue != null && cert.progressValue!.isNotEmpty)
+          '진행: ${cert.progressValue}',
+        '달성률 ${stats.percent}% · 도장 ${stats.certifiedDays}/${stats.totalDutyDays}일',
+      ].join('\n'),
+      attachNote: cert.hasPhoto ? '인증 사진이 함께 올라가요' : '사진 없이 글만 올라가요',
+    );
+    if (draft == null || !mounted) return;
+
+    try {
+      final photo =
+          cert.hasPhoto ? await MediaStore.readBytes(cert.photoPath) : null;
+      final id = await WebBoardService.share(
+        stats: stats,
+        title: draft.$1,
+        body: draft.$2,
+        imageBytes: photo,
+        imageMime: 'image/jpeg',
+        imageName: 'cert.jpg',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('성과 게시판에 올렸어요 🎉'),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: '보러가기',
+            onPressed: () => launchUrl(
+              Uri.parse(WebBoardService.postUrl(id)),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   @override

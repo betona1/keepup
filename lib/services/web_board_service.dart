@@ -19,12 +19,15 @@ class WebBoardService {
   /// 게시된 글 주소
   static String postUrl(int id) => '$base/stories/$id';
 
-  /// 회고(성과)를 게시판에 올린다. 성공하면 글 id, 실패하면 예외.
+  /// 성과를 게시판에 올린다 (회고 카드 이미지 또는 인증 사진 첨부).
+  /// 성공하면 글 id, 실패하면 예외.
   static Future<int> share({
     required RetroStats stats,
     required String title,
     required String body,
-    Uint8List? cardPng,
+    Uint8List? imageBytes,
+    String imageMime = 'image/png',
+    String imageName = 'image.png',
   }) async {
     final token = await AccountService.instance.sessionToken();
     if (token == null) {
@@ -45,12 +48,13 @@ class WebBoardService {
       ..fields['achievedPercent'] = '${stats.percent}'
       ..fields['body'] = _clamp(body, 5000);
 
-    if (cardPng != null) {
+    if (imageBytes != null) {
+      final parts = imageMime.split('/');
       req.files.add(http.MultipartFile.fromBytes(
         'images',
-        cardPng,
-        filename: 'retro_card.png',
-        contentType: MediaType('image', 'png'),
+        imageBytes,
+        filename: imageName,
+        contentType: MediaType(parts.first, parts.last),
       ));
     }
 
