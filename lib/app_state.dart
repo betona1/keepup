@@ -320,11 +320,11 @@ class AppState extends ChangeNotifier {
   /// 전체 도장 개수
   int totalStamps() => certs.length;
 
-  /// 사진 있는 최근 인증 (홈 갤러리 스트립용)
-  List<Certification> recentPhotoCerts({int limit = 10}) {
+  /// 사진 있는 최근 인증 (홈 인증 갤러리용). [limit]이 null이면 전부.
+  List<Certification> recentPhotoCerts({int? limit}) {
     final list = certs.where((c) => c.hasPhoto).toList()
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return list.take(limit).toList();
+    return limit == null ? list : list.take(limit).toList();
   }
 
   // ---- 회고 ----

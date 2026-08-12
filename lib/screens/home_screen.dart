@@ -43,7 +43,7 @@ class HomeBody extends StatelessWidget {
         final done = todayDuty
             .where((r) => state.isCertified(r.id, r.dutyKeyDate(today)))
             .length;
-        final photos = state.recentPhotoCerts();
+        final photos = state.recentPhotoCerts(); // 전체 — 갤러리가 아래로 쭉 이어진다
         final ended = state.endedRoutines(today);
 
         return ListView(
@@ -122,10 +122,10 @@ class HomeBody extends StatelessWidget {
               ],
               if (photos.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                Text('인증 갤러리',
+                Text('인증 갤러리 (${photos.length})',
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 10),
-                _GalleryStrip(state: state, certs: photos),
+                _GalleryGrid(state: state, certs: photos),
               ],
             ],
           ],
@@ -955,63 +955,68 @@ class _DeadlineChip extends StatelessWidget {
   }
 }
 
-/// 최근 인증 사진 가로 스트립 (Stitch: Certification Gallery)
-class _GalleryStrip extends StatelessWidget {
+/// 인증 사진 갤러리 — 한 줄 3장씩 아래로 쭉 이어지는 세로 그리드.
+/// 홈 전체가 스크롤(ListView)이므로 그리드 자체는 스크롤하지 않는다.
+class _GalleryGrid extends StatelessWidget {
   final AppState state;
   final List<Certification> certs;
-  const _GalleryStrip({required this.state, required this.certs});
+  const _GalleryGrid({required this.state, required this.certs});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 110,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: certs.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, i) {
-          final c = certs[i];
-          if (!MediaStore.existsSync(c.photoPath)) {
-            return const SizedBox.shrink();
-          }
-          return InkWell(
-            onTap: () =>
-                showCertDetail(context, c, state.routineById(c.routineId)),
-            borderRadius: BorderRadius.circular(14),
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: CertPhoto(
-                      path: c.photoPath,
-                      width: 150,
-                      height: 110,
-                      fit: BoxFit.cover),
-                ),
-                Positioned(
-                  left: 8,
-                  bottom: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      DateFormat('MM.dd HH:mm').format(c.timestamp),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700),
-                    ),
+    final visible =
+        certs.where((c) => MediaStore.existsSync(c.photoPath)).toList();
+    if (visible.isEmpty) return const SizedBox.shrink();
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3, // 한 줄에 3장
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 1, // 정사각
+      ),
+      itemCount: visible.length,
+      itemBuilder: (context, i) {
+        final c = visible[i];
+        return InkWell(
+          onTap: () =>
+              showCertDetail(context, c, state.routineById(c.routineId)),
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                // 썸네일 해상도로만 디코드 — 사진이 많아도 가볍게
+                child: CertPhoto(
+                    path: c.photoPath, fit: BoxFit.cover, cacheWidth: 360),
+              ),
+              Positioned(
+                left: 6,
+                bottom: 6,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    DateFormat('MM.dd').format(c.timestamp),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700),
                   ),
                 ),
-              ],
-            ),
-          );
-        },
-      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

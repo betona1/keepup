@@ -17,6 +17,9 @@ class CertPhoto extends StatefulWidget {
   /// 사진이 없거나 유실됐을 때 대신 그릴 위젯
   final Widget? placeholder;
 
+  /// 썸네일 디코드 폭(px) — 그리드처럼 작은 칸 여러 개를 그릴 때 메모리 절약
+  final int? cacheWidth;
+
   const CertPhoto({
     super.key,
     required this.path,
@@ -24,6 +27,7 @@ class CertPhoto extends StatefulWidget {
     this.width,
     this.height,
     this.placeholder,
+    this.cacheWidth,
   });
 
   @override
@@ -58,8 +62,11 @@ class _CertPhotoState extends State<CertPhoto> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = _provider;
+    var provider = _provider;
     if (provider != null) {
+      if (widget.cacheWidth != null) {
+        provider = ResizeImage(provider, width: widget.cacheWidth);
+      }
       return Image(
         image: provider,
         fit: widget.fit,
@@ -84,6 +91,7 @@ class _CertPhotoState extends State<CertPhoto> {
           fit: widget.fit,
           width: widget.width,
           height: widget.height,
+          cacheWidth: widget.cacheWidth,
           errorBuilder: (_, __, ___) => _blank(),
         );
       },
