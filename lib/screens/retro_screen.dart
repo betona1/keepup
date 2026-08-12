@@ -1,9 +1,13 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
 import '../models/retro_stats.dart';
 import '../models/routine.dart';
 import '../services/media_store.dart';
 import '../services/retro_service.dart';
+import '../services/web_board_service.dart';
+import '../widgets/login_sheet.dart';
 import '../widgets/retro_card.dart';
 
 /// 시즌 회고 카드 화면 — 카드를 보여주고 이미지로 공유한다.
@@ -22,6 +26,7 @@ class _RetroScreenState extends State<RetroScreen> {
   late RetroStats _stats;
   bool _ready = false; // 사진 로딩 완료 — 캡처에 빈 칸이 남지 않도록
   bool _sharing = false;
+  bool _posting = false; // 웹 게시판 업로드 중
 
   @override
   void initState() {
@@ -63,6 +68,117 @@ class _RetroScreenState extends State<RetroScreen> {
       }
     } finally {
       if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  /// 웹 성과 게시판(log.keywordream.com/stories)에 이 회고를 올린다.
+  /// 로그인 확인 → 제목·소감 작성 → 회고 카드 이미지와 함께 업로드.
+  Future<void> _shareToWeb() async {
+    if (!await ensureWebLogin(context)) return;
+    if (!mounted) return;
+
+    final r = _stats.routine;
+    final draft = await showDialog<(String, String)>(
+      context: context,
+      builder: (ctx) {
+        final titleCtrl = TextEditingController(
+            text: _stats.ended
+                ? '${r.title} — ${_stats.certifiedDays}일 도장 완주!'
+                : '${r.title} — ${_stats.certifiedDays}일째 도장 찍는 중');
+        final bodyCtrl = TextEditingController(
+            text: '달성률 ${_stats.percent}% · 도장 ${_stats.certifiedDays}/'
+                '${_stats.totalDutyDays}일 · 최장 연속 ${_stats.longestStreak}일'
+                '${_stats.tallyLabel != null ? '\n${_stats.tallyLabel}' : ''}'
+                '\n\n');
+        return AlertDialog(
+          title: const Text('웹 게시판에 자랑하기'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleCtrl,
+                  maxLength: 80,
+                  decoration: const InputDecoration(labelText: '제목'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: bodyCtrl,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    labelText: '소감',
+                    hintText: '이 시즌을 지나며 느낀 점을 남겨보세요',
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.image_outlined,
+                        size: 16,
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text('회고 카드 이미지가 함께 올라가요',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            FilledButton(
+              onPressed: () {
+                if (titleCtrl.text.trim().isEmpty ||
+                    bodyCtrl.text.trim().isEmpty) {
+                  return;
+                }
+                Navigator.pop(
+                    ctx, (titleCtrl.text.trim(), bodyCtrl.text.trim()));
+              },
+              child: const Text('게시하기'),
+            ),
+          ],
+        );
+      },
+    );
+    if (draft == null || !mounted) return;
+
+    setState(() => _posting = true);
+    try {
+      final png = await RetroService.capture(_cardKey, pixelRatio: 2.5);
+      final id = await WebBoardService.share(
+        stats: _stats,
+        title: draft.$1,
+        body: draft.$2,
+        cardPng: png,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('성과 게시판에 올렸어요 🎉'),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: '보러가기',
+            onPressed: () => launchUrl(
+              Uri.parse(WebBoardService.postUrl(id)),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _posting = false);
     }
   }
 
@@ -118,6 +234,27 @@ class _RetroScreenState extends State<RetroScreen> {
                 ),
               ),
             ),
+            // 웹 성과 게시판 업로드 — 로그인은 이때만 필요 (브라우저판은 숨김)
+            if (!kIsWeb) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: (_ready && !_posting) ? _shareToWeb : null,
+                  icon: _posting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.emoji_events_outlined, size: 18),
+                  label: Text(_posting ? '게시판에 올리는 중…' : '웹 게시판에 자랑하기'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             Text(
               '카드가 이미지로 저장되어 카톡·인스타 등으로 바로 보낼 수 있어요.',

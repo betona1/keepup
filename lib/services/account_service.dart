@@ -39,6 +39,9 @@ class AccountService {
     return _token;
   }
 
+  /// 현재 세션 토큰 (게시판 업로드 등 API 호출용). 미로그인이면 null.
+  Future<String?> sessionToken() => _loadToken();
+
   Future<void> saveToken(String token) async {
     _token = token;
     _cached = null;
