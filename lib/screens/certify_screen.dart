@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
@@ -41,9 +43,18 @@ class _CertifyScreenState extends State<CertifyScreen> {
   final _memo = TextEditingController();
   final _progress = TextEditingController();
   final _linkCtrl = TextEditingController(); // URL 인증
-  String? _pickedPath;
+  // 고른 사진은 바이트로 들고 있는다 — 웹은 파일 경로가 없기 때문
+  Uint8List? _pickedBytes;
   bool _isBackup = false;
   bool _saving = false;
+
+  /// 웹(브라우저)에서는 지원하지 않는 인증 방식 — 사진으로 대신 인증한다.
+  /// (녹음·동영상은 파일 저장이, 걸음수는 헬스 연동이 브라우저에 없다)
+  bool get _webUnsupported =>
+      kIsWeb &&
+      (_method == VerifyMethod.audio ||
+          _method == VerifyMethod.video ||
+          _method == VerifyMethod.steps);
 
   // 타이머 인증 (+ 명상 모드 배경 음악)
   // 경과 시간은 TimerService가 '시작 시각' 기준으로 관리한다 →
@@ -62,7 +73,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
     try {
       if (widget.routine.mediaIsUrl) {
         await _bgm.play(UrlSource(src));
-      } else if (File(src).existsSync()) {
+      } else if (!kIsWeb && File(src).existsSync()) {
         await _bgm.play(DeviceFileSource(src));
       }
     } catch (_) {/* 미디어 재생 실패는 조용히 무시 (타이머는 계속) */}
@@ -185,7 +196,9 @@ class _CertifyScreenState extends State<CertifyScreen> {
       imageQuality: 92,
       maxWidth: 2000,
     );
-    if (x != null) setState(() => _pickedPath = x.path);
+    if (x == null) return;
+    final bytes = await x.readAsBytes();
+    if (mounted) setState(() => _pickedBytes = bytes);
   }
 
   // ── 타이머 (TimerService가 시간 계산·지속을 담당) ──
@@ -249,8 +262,9 @@ class _CertifyScreenState extends State<CertifyScreen> {
   // 복구 모드는 증빙(사진 등)이 없어도 도장을 되살릴 수 있다
   bool get _canSubmit =>
       widget.recovery ||
+      (_webUnsupported && _pickedBytes != null) ||
       switch (_method) {
-        VerifyMethod.photo => _pickedPath != null,
+        VerifyMethod.photo => _pickedBytes != null,
         VerifyMethod.timer => _timerDone,
         VerifyMethod.audio => _audioPath != null && !_recording,
         VerifyMethod.video => _videoPath != null,
@@ -264,7 +278,9 @@ class _CertifyScreenState extends State<CertifyScreen> {
     return t.startsWith('http') && u != null && u.hasAuthority;
   }
 
-  String get _blockReason => switch (_method) {
+  String get _blockReason => _webUnsupported
+      ? '이 인증 방식은 앱에서만 지원해요. 브라우저에서는 사진으로 인증해 주세요'
+      : switch (_method) {
         VerifyMethod.photo => '인증 사진을 먼저 선택해 주세요',
         VerifyMethod.timer =>
           '타이머로 ${widget.routine.timerMinutes}분을 채우면 인증할 수 있어요',
@@ -303,8 +319,8 @@ class _CertifyScreenState extends State<CertifyScreen> {
 
     // 사진이 있으면 날짜·시각 워터마크 자동 삽입 (타이머/녹음은 사진 선택)
     String stampedPath = '';
-    if (_pickedPath != null) {
-      stampedPath = await WatermarkService.stamp(_pickedPath!, now);
+    if (_pickedBytes != null) {
+      stampedPath = await WatermarkService.stamp(_pickedBytes!, now);
     }
 
     final cert = Certification(
@@ -350,7 +366,10 @@ class _CertifyScreenState extends State<CertifyScreen> {
             children: [
               Row(
                 children: [
-                  const StampMark(size: 40, filledCheck: true),
+                  StampMark(
+                      size: 40,
+                      filledCheck: true,
+                      level: widget.state.levelFor(widget.routine.id)),
                   const SizedBox(width: 10),
                   const Text('도장 찍었습니다!',
                       style: TextStyle(
@@ -452,7 +471,12 @@ class _CertifyScreenState extends State<CertifyScreen> {
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
           ],
-          if (_method == VerifyMethod.audio) ...[
+          // 브라우저에서 못 쓰는 인증 방식 → 사진 인증으로 대신 안내
+          if (_webUnsupported) ...[
+            _WebUnsupportedBox(method: _method),
+            const SizedBox(height: 16),
+          ],
+          if (_method == VerifyMethod.audio && !_webUnsupported) ...[
             _RecorderBox(
               recording: _recording,
               hasAudio: _audioPath != null,
@@ -465,7 +489,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
           ],
-          if (_method == VerifyMethod.steps) ...[
+          if (_method == VerifyMethod.steps && !_webUnsupported) ...[
             _StepsBox(
               steps: _todaySteps,
               target: widget.routine.targetSteps,
@@ -490,7 +514,7 @@ class _CertifyScreenState extends State<CertifyScreen> {
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
           ],
-          if (_method == VerifyMethod.video) ...[
+          if (_method == VerifyMethod.video && !_webUnsupported) ...[
             _VideoBox(controller: _videoCtrl),
             const SizedBox(height: 12),
             Row(
@@ -517,7 +541,9 @@ class _CertifyScreenState extends State<CertifyScreen> {
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
           ],
-          _PhotoArea(path: _pickedPath, optional: _method != VerifyMethod.photo),
+          _PhotoArea(
+              bytes: _pickedBytes,
+              optional: _method != VerifyMethod.photo && !_webUnsupported),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -1073,10 +1099,53 @@ class _RecorderBox extends StatelessWidget {
   }
 }
 
+/// 브라우저에서 지원하지 않는 인증 방식 안내 — 사진으로 대신 인증하도록 유도
+class _WebUnsupportedBox extends StatelessWidget {
+  final VerifyMethod method;
+  const _WebUnsupportedBox({required this.method});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final label = switch (method) {
+      VerifyMethod.audio => '녹음 인증',
+      VerifyMethod.video => '동영상 인증',
+      _ => '걸음수 자동 인증',
+    };
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.install_mobile, size: 20, color: cs.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$label은 앱에서만 지원해요',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text('브라우저에서는 아래에 인증 사진을 올려 도장을 찍을 수 있어요.',
+                    style: TextStyle(
+                        fontSize: 12.5, color: cs.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PhotoArea extends StatelessWidget {
-  final String? path;
+  final Uint8List? bytes;
   final bool optional;
-  const _PhotoArea({this.path, this.optional = false});
+  const _PhotoArea({this.bytes, this.optional = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1089,7 +1158,7 @@ class _PhotoArea extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
         ),
         clipBehavior: Clip.antiAlias,
-        child: path == null
+        child: bytes == null
             ? Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1102,7 +1171,7 @@ class _PhotoArea extends StatelessWidget {
                   ],
                 ),
               )
-            : Image.file(File(path!), fit: BoxFit.cover),
+            : Image.memory(bytes!, fit: BoxFit.cover),
       ),
     );
   }

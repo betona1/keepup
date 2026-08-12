@@ -1,0 +1,38 @@
+{
+    "name": "로그챌린지 — 습관 인증 챌린지",
+    "short_name": "로그챌린지",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#F7F9FF",
+    "theme_color": "#274ED5",
+    "lang": "ko",
+    "dir": "ltr",
+    "orientation": "portrait-primary",
+    "description": "습관을 사진으로 인증하면 도장이 찍힙니다. 루틴 선언 · 사진/타이머 인증 · 도장 달력 · 기록 앨범.",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

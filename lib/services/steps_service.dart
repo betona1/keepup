@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 
 /// 걸음수 자동 검증 — Health Connect(안드로이드)/HealthKit(iOS)에서
@@ -15,8 +16,12 @@ class StepsService {
     _configured = true;
   }
 
+  /// 걸음수를 읽어올 수 있는 환경인지 (웹은 Health Connect/HealthKit이 없다)
+  static const bool supported = !kIsWeb;
+
   /// 권한 요청 → 오늘 걸음수 반환. 권한 거부/미지원이면 null.
   Future<int?> todaySteps() async {
+    if (!supported) return null;
     await _ensureConfigured();
     const types = [HealthDataType.STEPS];
 

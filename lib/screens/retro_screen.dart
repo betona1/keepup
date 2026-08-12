@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models/retro_stats.dart';
 import '../models/routine.dart';
+import '../services/media_store.dart';
 import '../services/retro_service.dart';
 import '../widgets/retro_card.dart';
 
@@ -37,11 +37,14 @@ class _RetroScreenState extends State<RetroScreen> {
 
   /// 카드 안 사진을 미리 디코드해 둔다 (캡처 시점에 비어 있으면 안 되므로)
   Future<void> _precache() async {
+    // 웹은 사진이 브라우저 저장소에 있어 먼저 읽어 와야 카드에 담긴다
+    await MediaStore.preload(_stats.photoCerts.map((c) => c.photoPath));
+    if (!mounted) return;
     for (final c in _stats.photoCerts) {
-      final file = File(c.photoPath);
-      if (!file.existsSync()) continue;
+      final provider = MediaStore.providerFor(c.photoPath);
+      if (provider == null) continue;
       try {
-        await precacheImage(FileImage(file), context);
+        await precacheImage(provider, context);
       } catch (_) {
         // 깨진 사진은 카드에서 회색 칸으로 그려진다
       }

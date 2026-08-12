@@ -1,9 +1,9 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/retro_stats.dart';
 import '../models/routine.dart';
+import '../services/media_store.dart';
 import '../theme.dart';
 
 /// 시즌 회고 카드 — 이미지로 캡처해 공유하는 결과물.
@@ -369,12 +369,18 @@ class RetroCard extends StatelessWidget {
               aspectRatio: 1,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: Image.file(
-                  File(stats.photoCerts[i].photoPath),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      Container(color: const Color(0xFFEFF1F8)),
-                ),
+                // 캡처 시점에 곧바로 그려져야 하므로 미리 읽어 둔 이미지만 쓴다
+                // (회고 화면이 열릴 때 MediaStore.preload로 채워진다)
+                child: switch (
+                    MediaStore.providerFor(stats.photoCerts[i].photoPath)) {
+                  final provider? => Image(
+                      image: provider,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          Container(color: const Color(0xFFEFF1F8)),
+                    ),
+                  _ => Container(color: const Color(0xFFEFF1F8)),
+                },
               ),
             ),
           ),

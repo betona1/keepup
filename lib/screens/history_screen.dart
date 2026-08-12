@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,9 +8,11 @@ import 'package:intl/intl.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
 import 'package:image_picker/image_picker.dart';
+import '../services/media_store.dart';
 import '../services/share_service.dart';
 import '../services/watermark_service.dart';
 import '../theme.dart';
+import '../widgets/cert_photo.dart';
 import 'certify_screen.dart';
 import 'retro_screen.dart';
 
@@ -337,10 +340,14 @@ class _DayCell extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: certified
-              ? Transform.rotate(
-                  angle: -0.12,
-                  child: const Icon(Icons.check_circle_outline,
-                      size: 17, color: AppTheme.stamp),
+              // 인증한 날 = 바브바브 얼굴 도장 (칸 크기에 맞춰 자동 축소, 레벨 반영)
+              ? LayoutBuilder(
+                  builder: (_, c) => Transform.rotate(
+                    angle: -0.12,
+                    child: VaveFace(
+                        size: c.maxWidth * 0.82,
+                        level: state.levelFor(routine.id)),
+                  ),
                 )
               : Text(
                   inSeason ? '${day.day}' : '',
@@ -447,8 +454,8 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
       final x = await ImagePicker()
           .pickImage(source: ImageSource.gallery, imageQuality: 92, maxWidth: 2000);
       if (x != null) {
-        final stamped =
-            await WatermarkService.stamp(x.path, widget.cert.timestamp);
+        final stamped = await WatermarkService.stamp(
+            await x.readAsBytes(), widget.cert.timestamp);
         await state.replaceCertPhoto(widget.cert.id, stamped);
         if (mounted) {
           Navigator.pop(context); // 갱신된 내용으로 다시 열도록 닫기
@@ -469,7 +476,8 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
       if (mounted) setState(() => _playing = false);
     });
     final vp = widget.cert.videoPath;
-    if (vp != null && File(vp).existsSync()) {
+    // 동영상 재생은 파일 기반이라 설치형 앱에서만 (웹은 안내 문구로 대체)
+    if (!kIsWeb && vp != null && File(vp).existsSync()) {
       _videoCtrl = VideoPlayerController.file(File(vp))
         ..initialize().then((_) {
           if (mounted) setState(() {});
@@ -503,12 +511,12 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (cert.hasPhoto && File(cert.photoPath).existsSync())
-              Image.file(File(cert.photoPath)),
+            if (cert.hasPhoto && MediaStore.existsSync(cert.photoPath))
+              CertPhoto(path: cert.photoPath, fit: BoxFit.contain),
             // 사진 기록은 있는데 파일이 유실됨 → 갤러리 원본으로 다시 붙이기
             if (widget.state != null &&
                 cert.verifyMethod == 'photo' &&
-                !(cert.hasPhoto && File(cert.photoPath).existsSync()))
+                !(cert.hasPhoto && MediaStore.existsSync(cert.photoPath)))
               _MissingPhotoBanner(
                 busy: _relinking,
                 onPick: _relinkPhoto,
@@ -611,7 +619,8 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                             ),
                           ),
                         ],
-                        if (method == 'audio' &&
+                        if (!kIsWeb &&
+                            method == 'audio' &&
                             cert.audioPath != null &&
                             File(cert.audioPath!).existsSync()) ...[
                           const SizedBox(height: 8),
@@ -712,8 +721,7 @@ class _CertTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final file = File(cert.photoPath);
-    final hasPhoto = cert.hasPhoto && file.existsSync();
+    final hasPhoto = cert.hasPhoto && MediaStore.existsSync(cert.photoPath);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -723,7 +731,7 @@ class _CertTile extends StatelessWidget {
           children: [
             Expanded(
               child: hasPhoto
-                  ? Image.file(file, fit: BoxFit.cover)
+                  ? CertPhoto(path: cert.photoPath, fit: BoxFit.cover)
                   : Container(
                       color: cs.surfaceContainerHighest,
                       child: Center(

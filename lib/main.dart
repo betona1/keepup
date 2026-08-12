@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -6,6 +7,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 
 import 'app_state.dart';
 import 'theme.dart';
+import 'services/media_store.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 import 'services/timer_service.dart';
@@ -15,6 +17,7 @@ import 'services/backup_service.dart';
 import 'screens/history_screen.dart';
 import 'screens/add_routine_screen.dart';
 import 'screens/notif_settings_screen.dart';
+import 'screens/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +35,9 @@ Future<void> main() async {
   }
 
   await NotificationService.instance.init();
+
+  // 사진 저장소 준비 (네이티브: 앱 문서 폴더 / 웹: 브라우저 IndexedDB)
+  await MediaStore.init();
 
   final storage = await StorageService.create();
   final state = AppState(storage);
@@ -58,7 +64,40 @@ class HabitApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
-      home: RootScreen(state: state),
+      home: _Entry(state: state),
+    );
+  }
+}
+
+/// 인트로(3초) → 앱 본화면. 인트로는 첫 실행 여부와 무관하게 매번 짧게 보여준다.
+class _Entry extends StatefulWidget {
+  final AppState state;
+  const _Entry({required this.state});
+
+  @override
+  State<_Entry> createState() => _EntryState();
+}
+
+class _EntryState extends State<_Entry> {
+  bool _intro = true;
+
+  @override
+  Widget build(BuildContext context) {
+    // 본화면을 먼저 깔고 그 위를 인트로가 덮는다.
+    // 인트로가 스스로 옅어지며 사라지므로 중간에 빈 화면이 깜빡이지 않고,
+    // 인트로가 도는 3초 동안 본화면이 미리 준비된다.
+    return Stack(
+      children: [
+        RootScreen(state: widget.state),
+        if (_intro)
+          Positioned.fill(
+            child: SplashScreen(
+              onDone: () {
+                if (mounted) setState(() => _intro = false);
+              },
+            ),
+          ),
+      ],
     );
   }
 }
@@ -80,6 +119,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // 타이머가 목표를 채우면 인증 화면으로 이동해 자동으로 도장을 찍는다
     TimerService.instance.onComplete = _onTimerComplete;
+    // 인트로가 도는 사이에 목표를 채웠을 수도 있으니 한 번 점검한다
+    TimerService.instance.checkCompletion();
     // 자동 스냅샷으로 데이터를 되살렸으면 사용자에게 알린다
     if (widget.state.restoredFromAutosave) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -195,16 +236,18 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
         title: _index == 0 ? const AppLogo(height: 32) : Text(titles[_index]),
         actions: [
           // 알림 설정 (아침 리마인더 시각 · 마감 임박 슬롯 · 테스트 알림)
-          IconButton(
-            tooltip: '알림 설정',
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => NotifSettingsScreen(state: widget.state),
+          // 브라우저는 예약 알림 자체가 없어서 숨긴다
+          if (!kIsWeb)
+            IconButton(
+              tooltip: '알림 설정',
+              icon: const Icon(Icons.notifications_outlined),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NotifSettingsScreen(state: widget.state),
+                ),
               ),
             ),
-          ),
           // 백업/이전 메뉴
           PopupMenuButton<String>(
             tooltip: '백업/이전',

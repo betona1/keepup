@@ -102,6 +102,7 @@ class AppState extends ChangeNotifier {
       startDate: r.startDate,
       endDate: r.endDate,
       changeUsedCount: r.changeUsedCount + 1,
+      iconPath: r.iconPath,
     );
     routines = [...routines];
     await _persistAndSync();
@@ -136,6 +137,7 @@ class AppState extends ChangeNotifier {
       startDate: r.startDate,
       endDate: newEnd,
       changeUsedCount: r.changeUsedCount,
+      iconPath: r.iconPath,
     );
     routines = [...routines];
     await _persistAndSync();
@@ -173,10 +175,29 @@ class AppState extends ChangeNotifier {
       startDate: ns,
       endDate: newEnd,
       changeUsedCount: r.changeUsedCount,
+      iconPath: r.iconPath,
     );
     routines = [...routines];
     await _persistAndSync();
     return true;
+  }
+
+  /// 도장 레벨 (1~3) — 인증한 일수가 쌓일수록 바브바브 도장이 진화한다.
+  /// 7일(1주일치) 도장 = 2단계, 21일(3주치) 도장 = 3단계.
+  int levelFor(String routineId) {
+    final days = certifiedDayCount(routineId);
+    if (days >= 21) return 3;
+    if (days >= 7) return 2;
+    return 1;
+  }
+
+  /// 루틴 아이콘 사진 변경 (null = 기본 아이콘으로 되돌리기)
+  Future<void> updateRoutineIcon(String routineId, String? iconPath) async {
+    final idx = routines.indexWhere((r) => r.id == routineId);
+    if (idx < 0) return;
+    routines[idx].iconPath = iconPath;
+    routines = [...routines];
+    await _persistAndSync();
   }
 
   /// 백업 복원 — 현재 데이터를 백업 내용으로 전부 교체

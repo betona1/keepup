@@ -1,12 +1,15 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
 import '../services/account_service.dart';
+import '../services/media_store.dart';
 import '../services/quote_service.dart';
 import '../theme.dart';
+import '../widgets/cert_photo.dart';
 import '../widgets/marquee_text.dart';
+import '../widgets/routine_icon.dart';
 import 'certify_screen.dart';
 import 'history_screen.dart' show showCertDetail;
 import 'retro_screen.dart';
@@ -168,7 +171,8 @@ class _GreetingHeader extends StatelessWidget {
             ],
           ),
         ),
-        const ProfileAvatar(),
+        // 웹 계정 로그인은 설치형 앱에서만 (브라우저판은 로그인 없이 사용)
+        if (!kIsWeb) const ProfileAvatar(),
       ],
     );
   }
@@ -640,15 +644,6 @@ class _RoutineCard extends StatelessWidget {
   const _RoutineCard(
       {required this.state, required this.routine, required this.day});
 
-  IconData get _methodIcon => switch (routine.verifyMethod) {
-        VerifyMethod.photo => Icons.photo_camera_outlined,
-        VerifyMethod.timer => Icons.timer_outlined,
-        VerifyMethod.audio => Icons.mic_none_rounded,
-        VerifyMethod.video => Icons.videocam_outlined,
-        VerifyMethod.steps => Icons.directions_walk_rounded,
-        VerifyMethod.link => Icons.link_rounded,
-      };
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -669,8 +664,11 @@ class _RoutineCard extends StatelessWidget {
             .where((c) => c.dateKey == dateKeyOf(effDay))
             .length
         : 0;
+    // 도장 레벨 — 7일 도장 = 2단계, 21일 = 3단계. 카드가 함께 화려해진다.
+    final level = state.levelFor(routine.id);
+    final ringColors = AppTheme.stampRingColors(level);
 
-    return Card(
+    final card = Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: locked
@@ -687,31 +685,54 @@ class _RoutineCard extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
           child: Row(
             children: [
-              // 좌측: 검증 방식 아이콘 필 (Stitch 스타일)
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(_methodIcon, color: cs.primary, size: 24),
+              // 좌측: 아이콘 타일 — 탭하면 인증사진/갤러리 사진으로 꾸미기
+              GestureDetector(
+                onTap: () => showRoutineIconPicker(context, state, routine),
+                child: RoutineIconTile(routine: routine, level: level),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      routine.title,
-                      style:
-                          Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontSize: 15.5,
-                                color: certified
-                                    ? cs.onSurfaceVariant
-                                    : cs.onSurface,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            routine.title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontSize: 15.5,
+                                  color: certified
+                                      ? cs.onSurfaceVariant
+                                      : cs.onSurface,
+                                ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // 2단계부터 레벨 배지 (도장 링과 같은 그라데이션)
+                        if (level >= 2) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(colors: ringColors),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              level >= 3 ? '👑 3단계' : '⭐ 2단계',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
                               ),
-                      overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -751,17 +772,40 @@ class _RoutineCard extends StatelessWidget {
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const StampButton(certified: true),
+                        StampButton(certified: true, level: level),
                         const SizedBox(height: 2),
                         Icon(Icons.add_circle,
                             size: 18, color: cs.primary),
                       ],
                     )
-                  : StampButton(certified: certified),
+                  : StampButton(certified: certified, level: level),
             ],
           ),
         ),
       ),
+    );
+
+    // 2단계부터 카드 테두리가 레벨 색 그라데이션으로 빛난다
+    if (level < 2) return card;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(21.5),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: ringColors,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: ringColors.last
+                .withValues(alpha: level >= 3 ? 0.32 : 0.18),
+            blurRadius: level >= 3 ? 16 : 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(1.6),
+      child: card,
     );
   }
 
@@ -927,8 +971,9 @@ class _GalleryStrip extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, i) {
           final c = certs[i];
-          final file = File(c.photoPath);
-          if (!file.existsSync()) return const SizedBox.shrink();
+          if (!MediaStore.existsSync(c.photoPath)) {
+            return const SizedBox.shrink();
+          }
           return InkWell(
             onTap: () =>
                 showCertDetail(context, c, state.routineById(c.routineId)),
@@ -937,8 +982,11 @@ class _GalleryStrip extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: Image.file(file,
-                      width: 150, height: 110, fit: BoxFit.cover),
+                  child: CertPhoto(
+                      path: c.photoPath,
+                      width: 150,
+                      height: 110,
+                      fit: BoxFit.cover),
                 ),
                 Positioned(
                   left: 8,

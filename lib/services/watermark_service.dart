@@ -1,21 +1,20 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:gal/gal.dart';
 import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'media_store.dart';
 
 /// 인증 사진에 날짜·시각을 자동으로 새겨 저장한다.
 /// (규칙: "사진엔 필히 날짜가 표기되어야 함"을 앱이 자동 처리)
 class WatermarkService {
-  /// [sourcePath] 원본 사진에 워터마크를 찍어 앱 문서 폴더에 저장하고,
-  /// 저장된 새 파일 경로를 반환한다.
-  static Future<String> stamp(String sourcePath, DateTime when) async {
-    final bytes = await File(sourcePath).readAsBytes();
+  /// 원본 사진 [bytes]에 워터마크를 찍어 저장하고, 이후 읽을 때 쓸 경로를 반환한다.
+  /// (네이티브는 앱 문서 폴더 파일 경로, 웹은 브라우저 저장소 키)
+  static Future<String> stamp(Uint8List bytes, DateTime when) async {
     var image = img.decodeImage(bytes);
     if (image == null) {
-      // 디코드 실패 시 원본 경로를 그대로 사용
-      return sourcePath;
+      // 디코드 실패 — 원본 그대로라도 남긴다
+      return MediaStore.saveBytes(_fileName(when), bytes);
     }
 
     // 너무 큰 사진은 가로 1440px로 축소 (메모리/용량 절약)
@@ -51,21 +50,21 @@ class WatermarkService {
       color: img.ColorRgb8(255, 255, 255),
     );
 
-    final dir = await getApplicationDocumentsDirectory();
-    final photosDir = Directory('${dir.path}/certs');
-    if (!await photosDir.exists()) {
-      await photosDir.create(recursive: true);
-    }
-    final outPath =
-        '${photosDir.path}/cert_${when.millisecondsSinceEpoch}.jpg';
-    await File(outPath).writeAsBytes(img.encodeJpg(image, quality: 88));
+    final jpg = img.encodeJpg(image, quality: 88);
+    final path = await MediaStore.saveBytes(_fileName(when), jpg);
 
     // 갤러리 'KeepUp' 앨범에도 저장 — 앱을 지워도 워터마크 원본이 폰에 영구 보존됨
-    try {
-      await Gal.putImage(outPath, album: 'KeepUp');
-    } catch (e) {
-      debugPrint('갤러리 저장 실패(무시): $e'); // 권한 거부 등은 무시, 앱 내 저장은 유지
+    // (웹은 갤러리가 없으므로 건너뛴다)
+    if (!MediaStore.isWeb) {
+      try {
+        await Gal.putImage(path, album: 'KeepUp');
+      } catch (e) {
+        debugPrint('갤러리 저장 실패(무시): $e'); // 권한 거부 등은 무시, 앱 내 저장은 유지
+      }
     }
-    return outPath;
+    return path;
   }
+
+  static String _fileName(DateTime when) =>
+      'cert_${when.millisecondsSinceEpoch}.jpg';
 }

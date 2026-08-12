@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../models/routine.dart';
@@ -265,7 +266,8 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
           // ── 검증 방식 선택 — 루틴 성격에 맞게 고르기 쉽게 카드로 ──
           Text('검증 방법', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          ...selectableVerifyMethods.map((m) => Padding(
+          ...(kIsWeb ? webSelectableVerifyMethods : selectableVerifyMethods)
+              .map((m) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _VerifyCard(
                   method: m,
@@ -313,18 +315,20 @@ class _AddRoutineScreenState extends State<AddRoutineScreen> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 6),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final res = await FilePicker.platform
-                    .pickFiles(type: FileType.audio);
-                final path = res?.files.single.path;
-                if (path != null) {
-                  setState(() => _mediaUrl.text = path);
-                }
-              },
-              icon: const Icon(Icons.library_music_outlined, size: 18),
-              label: const Text('내 폰의 음악 파일 선택'),
-            ),
+            // 로컬 음악 파일은 경로로 재생하므로 설치형 앱에서만 (웹은 URL 사용)
+            if (!kIsWeb)
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final res = await FilePicker.platform
+                      .pickFiles(type: FileType.audio);
+                  final path = res?.files.single.path;
+                  if (path != null) {
+                    setState(() => _mediaUrl.text = path);
+                  }
+                },
+                icon: const Icon(Icons.library_music_outlined, size: 18),
+                label: const Text('내 폰의 음악 파일 선택'),
+              ),
             const SizedBox(height: 4),
             Text('타이머가 도는 동안 재생됩니다. 음악·URL은 앱 안에서, 유튜브는 유튜브로 열려요.',
                 style: Theme.of(context).textTheme.bodySmall),

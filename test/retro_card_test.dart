@@ -160,23 +160,18 @@ void main() {
 
     // 엔진 디코딩(runAsync)이 필요한 작업은 모두 이 블록 안에서 끝낸다 —
     // 가짜 시간축에서는 실제 비동기가 완료되지 않아 밖으로 새면 멈춘다
-    late File out;
+    late Uint8List out;
     late int width;
     late int height;
     await tester.runAsync(() async {
       out = await RetroService.capture(key, pixelRatio: 2.0);
-      final decoded = await decodeImageFromList(out.readAsBytesSync());
+      final decoded = await decodeImageFromList(out);
       width = decoded.width;
       height = decoded.height;
     });
 
-    expect(out.existsSync(), isTrue);
-    expect(out.path, contains('retro'));
-    expect(out.path, endsWith('.png'));
-
     // 진짜 PNG인지 (매직 넘버) + 카드 폭 * pixelRatio 만큼 나왔는지
-    final bytes = out.readAsBytesSync();
-    expect(bytes.sublist(0, 8), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    expect(out.sublist(0, 8), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
     expect(width, (RetroCard.width * 2).round());
     expect(height, greaterThan(500));
   });

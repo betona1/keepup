@@ -37,6 +37,14 @@ const selectableVerifyMethods = [
   VerifyMethod.link,
 ];
 
+/// 브라우저(PWA)에서 고를 수 있는 검증 방식.
+/// 녹음·동영상은 파일 저장이, 걸음수는 헬스 연동이 브라우저에 없어 앱 전용이다.
+const webSelectableVerifyMethods = [
+  VerifyMethod.photo,
+  VerifyMethod.timer,
+  VerifyMethod.link,
+];
+
 extension RoutineTypeLabel on RoutineType {
   String get label => switch (this) {
         RoutineType.accumulate => '적립형',
@@ -101,6 +109,7 @@ class Routine {
   final DateTime startDate; // 시즌 시작일 (날짜만)
   final DateTime endDate; // 완료 목표일 (기본: 시작 +62일 = 63일간)
   int changeUsedCount; // 루틴 변경 찬스 사용 횟수 (0 또는 1)
+  String? iconPath; // 사용자 지정 아이콘 사진 (MediaStore 경로, null = 기본 아이콘)
 
   Routine({
     required this.id,
@@ -122,6 +131,7 @@ class Routine {
     DateTime? startDate,
     DateTime? endDate,
     this.changeUsedCount = 0,
+    this.iconPath,
   })  : startDate = _dateOnly(startDate ?? createdAt),
         endDate = _dateOnly(
             endDate ?? (startDate ?? createdAt).add(const Duration(days: 62)));
@@ -244,6 +254,7 @@ class Routine {
         'startDate': startDate.toIso8601String(),
         'endDate': endDate.toIso8601String(),
         'changeUsedCount': changeUsedCount,
+        'iconPath': iconPath,
       };
 
   factory Routine.fromJson(Map<String, dynamic> j) => Routine(
@@ -275,6 +286,7 @@ class Routine {
             ? DateTime.parse(j['endDate'] as String)
             : null,
         changeUsedCount: (j['changeUsedCount'] as num?)?.toInt() ?? 0,
+        iconPath: j['iconPath'] as String?,
       );
 }
 

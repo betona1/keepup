@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -6,13 +7,14 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/retro_stats.dart';
+import 'media_store.dart';
 import 'share_service.dart';
 
-/// 회고 카드를 이미지로 굽고 OS 공유 시트로 내보낸다.
+/// 회고 카드를 이미지로 굽고 공유(네이티브) 또는 다운로드(웹)로 내보낸다.
 /// (사용자가 카톡 오픈채팅방 등 대상을 직접 고른다 — 기획서 3.3)
 class RetroService {
-  /// 화면에 붙어 있는 [boundaryKey]의 위젯을 PNG로 캡처해 파일로 저장한다.
-  static Future<File> capture(
+  /// 화면에 붙어 있는 [boundaryKey]의 위젯을 PNG 바이트로 캡처한다.
+  static Future<Uint8List> capture(
     GlobalKey boundaryKey, {
     double pixelRatio = 3.0,
   }) async {
@@ -31,21 +33,30 @@ class RetroService {
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     if (bytes == null) throw StateError('카드 이미지를 만들지 못했어요');
+    return bytes.buffer.asUint8List();
+  }
+
+  /// 회고 카드를 캡처해 공유 시트를 띄운다 (웹은 공유 시트 또는 이미지 다운로드).
+  static Future<void> share(GlobalKey boundaryKey, RetroStats stats) async {
+    final bytes = await capture(boundaryKey);
+    final name = 'retro_${DateTime.now().millisecondsSinceEpoch}.png';
+
+    if (MediaStore.isWeb) {
+      await ShareService.shareBytes(
+        bytes: bytes,
+        filename: name,
+        mimeType: 'image/png',
+        text: _caption(stats),
+      );
+      return;
+    }
 
     final dir = await getApplicationDocumentsDirectory();
     final retroDir = Directory('${dir.path}/retro');
     if (!await retroDir.exists()) await retroDir.create(recursive: true);
+    final file = File('${retroDir.path}/$name');
+    await file.writeAsBytes(bytes, flush: true);
 
-    final path =
-        '${retroDir.path}/retro_${DateTime.now().millisecondsSinceEpoch}.png';
-    final file = File(path);
-    await file.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
-    return file;
-  }
-
-  /// 회고 카드를 캡처해 공유 시트를 띄운다.
-  static Future<void> share(GlobalKey boundaryKey, RetroStats stats) async {
-    final file = await capture(boundaryKey);
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'image/png')],

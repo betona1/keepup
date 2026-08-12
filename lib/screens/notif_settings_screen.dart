@@ -14,12 +14,22 @@ class NotifSettingsScreen extends StatefulWidget {
 }
 
 class _NotifSettingsScreenState extends State<NotifSettingsScreen> {
+  /// 안내 문구에 쓰는 시스템 알림 채널 이름 (설정 앱에서 이 이름으로 보인다)
+  static const _channelLabel = '습관 마감 알람';
+
   late NotifSettings _s;
+  AlarmStatus? _status;
 
   @override
   void initState() {
     super.initState();
     _s = widget.state.notifSettings;
+    _refreshStatus();
+  }
+
+  Future<void> _refreshStatus() async {
+    final s = await NotificationService.instance.diagnose();
+    if (mounted) setState(() => _status = s);
   }
 
   Future<void> _apply(NotifSettings next) async {
@@ -50,6 +60,8 @@ class _NotifSettingsScreenState extends State<NotifSettingsScreen> {
         padding: EdgeInsets.fromLTRB(
             16, 8, 16, 32 + MediaQuery.of(context).viewPadding.bottom),
         children: [
+          _statusCard(context),
+          const SizedBox(height: 20),
           _sectionLabel(context, '아침 리마인더'),
           Card(
             child: Column(
@@ -114,19 +126,129 @@ class _NotifSettingsScreenState extends State<NotifSettingsScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: () async {
-              await NotificationService.instance.scheduleTestNotification();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('1분 뒤 테스트 알림이 울립니다. 앱을 꺼도 울려요!')));
-              }
-            },
-            icon: const Icon(Icons.notifications_active_outlined, size: 18),
-            label: const Text('테스트 알림 보내기 (1분 뒤)'),
+          const SizedBox(height: 20),
+          _sectionLabel(context, '알람 소리'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.volume_up_rounded, color: cs.primary, size: 20),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text('앱 전용 알람음이 1분간 울려요',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '· 알람 볼륨으로 재생돼 무음 모드에서도 들립니다.\n'
+                    '· [알람 끄기]를 누르면 즉시 멈추고, 안 누르면 1분 뒤 저절로 멈춥니다.\n'
+                    '· 알람을 놓쳐도 소리 없는 카드가 알림창에 조용히 남습니다.\n'
+                    '· 앱을 완전히 종료하거나 화면이 꺼져 있어도 울립니다.',
+                    style: TextStyle(
+                        fontSize: 12, height: 1.6, color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      onPressed: () async {
+                        final error = await NotificationService.instance
+                            .scheduleTestNotification();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(error == null
+                                ? '10초 뒤 알람이 울립니다. 지금 앱을 꺼두고 확인해 보세요!'
+                                : '알람 예약에 실패했어요: $error'),
+                            duration: const Duration(seconds: 5),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.alarm_on_rounded, size: 18),
+                      label: const Text('알람 테스트 (10초 뒤)'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '소리가 안 들린다면: 휴대폰 설정 → 앱 → Log Challenge → 알림 →'
+                    ' "$_channelLabel" 채널의 소리가 켜져 있는지, 그리고 알람 볼륨이'
+                    ' 0이 아닌지 확인해 주세요.',
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        height: 1.5,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.85)),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 알람 상태 자가진단 — "왜 안 울리지?"를 앱 안에서 바로 확인할 수 있게 한다.
+  Widget _statusCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final st = _status;
+    if (st == null) {
+      return const SizedBox(height: 4);
+    }
+    final ok = st.healthy && st.pendingCount > 0;
+    final color = ok ? cs.tertiary : cs.error;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(ok ? Icons.verified_rounded : Icons.error_outline_rounded,
+                    color: color, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    ok ? '알람 정상 — 예약 ${st.pendingCount}건' : '알람을 확인해 주세요',
+                    style: TextStyle(fontWeight: FontWeight.w800, color: color),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '다시 점검',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  onPressed: _refreshStatus,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            for (final p in st.problems)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('· $p',
+                    style: TextStyle(fontSize: 12, height: 1.5, color: cs.error)),
+              ),
+            if (st.problems.isEmpty && st.pendingCount == 0)
+              Text(
+                '· 예약된 알람이 없어요. 오늘 인증을 이미 마쳤거나, 루틴이 없을 때는 정상입니다.',
+                style: TextStyle(
+                    fontSize: 12, height: 1.5, color: cs.onSurfaceVariant),
+              ),
+            if (ok)
+              Text(
+                '알림 권한 · 정확한 알람 권한 · 알람음까지 모두 정상입니다.',
+                style: TextStyle(
+                    fontSize: 12, height: 1.5, color: cs.onSurfaceVariant),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -1,7 +1,7 @@
 name: keepup
 description: 혼자 쓰는 습관 챌린지 인증 앱 (적립형/결과형 + 마감 3시간 전 알림)
 publish_to: 'none'
-version: 1.1.2+10
+version: 1.2.0+11
 
 environment:
   sdk: '>=3.4.0 <4.0.0'   # Flutter 3.22+ (Material3 surfaceContainer 색상 토큰 사용)
@@ -55,6 +55,11 @@ dependencies:
 
   # 인증 사진을 갤러리에도 저장 (앱 삭제돼도 원본 워터마크 사진 보존)
   gal: ^2.3.0
+
+  # 웹(PWA)에서 사진/백업을 브라우저에 보관 — IndexedDB (네이티브에선 미사용)
+  idb_shim: ^2.6.1
+  # 웹에서 파일 내려받기(Blob) 등 브라우저 API 접근
+  web: ^1.1.0
   flutter_web_auth_2: ^5.0.3
   google_sign_in: 6.2.2
 
@@ -69,6 +74,12 @@ flutter:
 
   assets:
     - assets/quotes.json
+    # 바브바브(VAVEVAVE) 캐릭터 — 도장·로고·스플래시에 공통 사용
+    # (원본 etc/바브바브01.png → `dart run tool/gen_character_assets.dart`로 생성)
+    - assets/character/vave_face.png
+    - assets/character/vave_face2.png
+    - assets/character/vave_face3.png
+    - assets/character/vave_full.png
 
   # 네이버 나눔고딕 (OFL 라이선스, 오프라인 번들)
   fonts:

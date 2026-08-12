@@ -18,7 +18,7 @@
 
 ## 1) 앱 이름 / 제목  (30자 이내)
 ```
-로그챌린지 - 습관 인증 챌린지
+로그챌린지: 습관 인증
 ```
 - "습관"+"챌린지" 포함 → **습관챌린지 검색 노출**
 
@@ -81,47 +81,6 @@ habit tracker, 루틴 관리, 습관 형성, 매일 인증, 도장 챌린지, 63
 2. **카메라·마이크·사진/미디어 권한** — 사용 이유: "습관 인증 사진·영상·음성 촬영(기기 내 저장)". 데이터 보안에선 "수집"으로 표시하지 않음(전송 안 하므로).
 3. **앱 서명**: 업로드하면 Google Play 앱 서명이 적용됨. 우리가 만든 keystore는 **업로드 키**로 계속 사용 → keystore/백업 절대 분실 금지 (`E:\app\keepup_keystore_backup`).
 4. **프로덕션 직행**: 조직 계정이라 비공개 테스트 의무는 없음. 단 첫 제출은 **검토(수일)** 후 공개.
-
----
-
-## 9) 영어권(글로벌) 등록정보 — 미리 준비
-> 글로벌 출시 시 Play Console에서 **영어(미국)** 언어를 추가하고 아래 붙여넣기.
-> 개인정보처리방침·약관은 이미 `log.keywordream.com/privacy` (우측 상단 **EN 토글**)로 영어 제공됨.
-
-**App name / Title** (≤30 chars)
-```
-Log Challenge - Habit Tracker
-```
-
-**Short description** (≤80 chars)
-```
-Verify daily habits with a photo or timer, stamp your streak, never miss a deadline.
-```
-
-**Full description**
-```
-Beat procrastination — stamp your habits into a record you can be proud of.
-
-Log Challenge is a habit-verification challenge app. Prove each habit with a photo,
-timer, voice recording, or video, and earn a stamp every time you check in.
-No account, no server — everything stays only on your device.
-
-■ Made for
-· Anyone who wants to break "3-day resolutions" and build habits that stick
-· Exercise, reading, study, meditation, early rising and other daily routines
-· Habit-challenge groups that log a daily check-in (stamp)
-
-■ Key features
-· Photo verification with an automatic date/time watermark — tamper-proof proof
-· Multiple ways to verify — photo / timer (running, meditation) / voice / video / link
-· Reminders 3 hours, 1 hour, and 30 minutes before the deadline — auto-cancel once you check in
-· Stamp calendar — see your completion rate and longest streak at a glance
-· Two routine types — Daily (build up every day) and Goal (declare a target, verify per cycle)
-· 66-day (9-week) seasons — the time a habit takes to stick, kept as a record
-
-A habit tracker, routine builder, and daily log in one app.
-Verify your habits proudly and keep the record. Log Challenge.
-```
 
 ---
 
