@@ -340,13 +340,14 @@ class _DayCell extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: certified
-              // 인증한 날 = 바브바브 얼굴 도장 (칸 크기에 맞춰 자동 축소, 레벨 반영)
+              // 인증한 날 = 그 날짜 시점 레벨의 바브바브 도장 —
+              // 달력에 1→2→3단계로 성장해 온 과정이 그대로 남는다
               ? LayoutBuilder(
                   builder: (_, c) => Transform.rotate(
                     angle: -0.12,
                     child: VaveFace(
                         size: c.maxWidth * 0.82,
-                        level: state.levelFor(routine.id)),
+                        level: routine.stampLevelOn(day)),
                   ),
                 )
               : Text(

@@ -194,6 +194,15 @@ class Routine {
     return due.isAfter(endDate) ? endDate : due;
   }
 
+  /// 그 날짜 시점의 도장 레벨 (1~3) — 시작일부터 시간이 지나며 바브바브가 성장한다.
+  /// 첫 1주일(0~6일차) = 1단계, 그 뒤 2주(7~20일차) = 2단계, 3주 이후(21일차~) = 3단계.
+  int stampLevelOn(DateTime date) {
+    final days = _dateOnly(date).difference(startDate).inDays;
+    if (days >= 21) return 3;
+    if (days >= 7) return 2;
+    return 1;
+  }
+
   /// 시즌이 끝났는지
   bool isEnded(DateTime today) => _dateOnly(today).isAfter(endDate);
 

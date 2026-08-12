@@ -182,13 +182,12 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  /// 도장 레벨 (1~3) — 인증한 일수가 쌓일수록 바브바브 도장이 진화한다.
-  /// 7일(1주일치) 도장 = 2단계, 21일(3주치) 도장 = 3단계.
+  /// 오늘 기준 도장 레벨 (1~3) — 루틴 시작일부터 흐른 시간으로 진화한다.
+  /// 첫 1주일 = 1단계, 그 뒤 2주 = 2단계, 3주 이후 = 3단계. (Routine.stampLevelOn)
   int levelFor(String routineId) {
-    final days = certifiedDayCount(routineId);
-    if (days >= 21) return 3;
-    if (days >= 7) return 2;
-    return 1;
+    final idx = routines.indexWhere((r) => r.id == routineId);
+    if (idx < 0) return 1;
+    return routines[idx].stampLevelOn(DateTime.now());
   }
 
   /// 루틴 아이콘 사진 변경 (null = 기본 아이콘으로 되돌리기)
