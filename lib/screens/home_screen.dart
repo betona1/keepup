@@ -8,6 +8,7 @@ import '../services/media_store.dart';
 import '../services/quote_service.dart';
 import '../theme.dart';
 import '../widgets/cert_photo.dart';
+import '../widgets/cloud_sync_sheet.dart';
 import '../widgets/marquee_text.dart';
 import '../widgets/routine_icon.dart';
 import 'certify_screen.dart';
@@ -49,7 +50,7 @@ class HomeBody extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
           children: [
-            _GreetingHeader(today: today),
+            _GreetingHeader(today: today, state: state),
             const SizedBox(height: 14),
             if (state.routines.isEmpty)
               _EmptyState()
@@ -138,7 +139,8 @@ class HomeBody extends StatelessWidget {
 /// 인사 + 날짜 + 웹 계정 프로필 (Stitch 대시보드 헤더)
 class _GreetingHeader extends StatelessWidget {
   final DateTime today;
-  const _GreetingHeader({required this.today});
+  final AppState state;
+  const _GreetingHeader({required this.today, required this.state});
 
   String get _greeting {
     final h = DateTime.now().hour;
@@ -171,8 +173,15 @@ class _GreetingHeader extends StatelessWidget {
             ],
           ),
         ),
-        // 웹 계정 로그인은 설치형 앱에서만 (브라우저판은 로그인 없이 사용)
-        if (!kIsWeb) const ProfileAvatar(),
+        // 로그인 상태 표시 + 게시판 공개·클라우드 백업의 진입점.
+        // 브라우저에서도 보여준다 (웹은 로그인 방법이 '페이지 이동' 하나뿐이라 시트를 건너뛴다).
+        ProfileAvatar(
+          onOpenCloudSync: () => showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            builder: (_) => CloudSyncSheet(state: state),
+          ),
+        ),
       ],
     );
   }
@@ -180,7 +189,9 @@ class _GreetingHeader extends StatelessWidget {
 
 /// 웹 계정 아바타 — 로그인하면 프로필, 안 하면 기본 아이콘 (탭: 로그인/계정)
 class ProfileAvatar extends StatefulWidget {
-  const ProfileAvatar({super.key});
+  /// 계정 시트에서 '클라우드 백업'을 눌렀을 때 (없으면 항목을 눌러도 동작하지 않음)
+  final VoidCallback? onOpenCloudSync;
+  const ProfileAvatar({super.key, this.onOpenCloudSync});
 
   @override
   State<ProfileAvatar> createState() => _ProfileAvatarState();
@@ -208,6 +219,11 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
 
   Future<void> _onTap() async {
     if (_account == null) {
+      // 브라우저는 Custom Tab·구글 원탭을 쓸 수 없어 로그인 페이지로 이동한다
+      if (kIsWeb) {
+        AccountService.instance.loginViaPage();
+        return;
+      }
       await _showLoginChooser();
       return;
     }
@@ -225,6 +241,17 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
                   style: const TextStyle(fontWeight: FontWeight.w700)),
               subtitle: Text(
                   'keywordream 계정${_account!.role == 'admin' ? ' · 관리자' : ''}'),
+            ),
+            const Divider(height: 1),
+            // 기록은 기기에 저장되므로, 로그인한 사람에게 '계정에 보관' 경로를 여기서 알려준다
+            ListTile(
+              leading: const Icon(Icons.cloud_outlined),
+              title: const Text('클라우드 백업'),
+              subtitle: const Text('기록을 계정에 보관 · 다른 기기에서 복원'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                widget.onOpenCloudSync?.call();
+              },
             ),
             const Divider(height: 1),
             ListTile(

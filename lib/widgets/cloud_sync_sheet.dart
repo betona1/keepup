@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -208,6 +209,72 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                       ],
                     ),
             ),
+
+            // 클라우드가 비어 있는데 내려받기만 눌러보는 경우가 많다.
+            // "다른 기기 기록을 가져오려면 그 기기에서 먼저 올려야 한다"를 여기서 알려준다.
+            if (!_loading && info != null && !info.exists) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.secondary.withValues(alpha: 0.35)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.swap_horiz_rounded, size: 18, color: cs.secondary),
+                      const SizedBox(width: 6),
+                      Text(
+                        kIsWeb ? '폰 앱의 기록을 가져오려면' : '다른 기기의 기록을 가져오려면',
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: cs.secondary),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    ...[
+                      kIsWeb
+                          ? '폰에서 로그챌린지 앱을 열고, 같은 계정으로 로그인'
+                          : '기록이 있는 기기에서 로그챌린지를 열고, 같은 계정으로 로그인',
+                      '우측 위 ⋮ → 클라우드 백업',
+                      '[지금 기록 올리기] 누르기',
+                      kIsWeb
+                          ? '여기로 돌아와 [클라우드에서 내려받기]'
+                          : '이 기기에서 [클라우드에서 내려받기]',
+                    ].asMap().entries.map((e) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${e.key + 1}. ',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: cs.secondary)),
+                              Expanded(
+                                child: Text(e.value,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        height: 1.35,
+                                        color: cs.onSurfaceVariant)),
+                              ),
+                            ],
+                          ),
+                        )),
+                    const SizedBox(height: 2),
+                    Text(
+                      '올리는 기기에서 직접 누르는 것이 곧 본인 확인입니다. '
+                      '같은 계정만 접근할 수 있어요.',
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             if (_message != null) ...[
               const SizedBox(height: 12),
