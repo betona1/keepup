@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -34,6 +35,25 @@ class RetroService {
     image.dispose();
     if (bytes == null) throw StateError('카드 이미지를 만들지 못했어요');
     return bytes.buffer.asUint8List();
+  }
+
+  /// 게시판 업로드 한도(서버 5MB)에 맞춰, 큰 PNG만 JPEG로 재압축한다.
+  /// 카드 배경이 불투명이라 JPEG 변환으로 화질 손실 없이 용량이 크게 준다.
+  static (Uint8List bytes, String mime, String name) fitForUpload(
+      Uint8List png) {
+    const maxBytes = 4 * 1024 * 1024; // 서버 한도 5MB에 여유를 둔 4MB
+    if (png.length <= maxBytes) return (png, 'image/png', 'retro_card.png');
+
+    var image = img.decodeImage(png);
+    if (image == null) return (png, 'image/png', 'retro_card.png');
+
+    var jpg = img.encodeJpg(image, quality: 88);
+    if (jpg.length > maxBytes) {
+      // 그래도 크면 해상도를 한 단계 줄여 한 번 더 (사실상 도달하지 않는 안전망)
+      image = img.copyResize(image, width: (image.width * 0.7).round());
+      jpg = img.encodeJpg(image, quality: 85);
+    }
+    return (jpg, 'image/jpeg', 'retro_card.jpg');
   }
 
   /// 회고 카드를 캡처해 공유 시트를 띄운다 (웹은 공유 시트 또는 이미지 다운로드).

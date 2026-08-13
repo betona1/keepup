@@ -93,13 +93,15 @@ class _RetroScreenState extends State<RetroScreen> {
     setState(() => _posting = true);
     try {
       final png = await RetroService.capture(_cardKey, pixelRatio: 2.5);
+      // 서버 업로드 한도(5MB)를 넘는 카드는 JPEG로 재압축해 올린다
+      final (bytes, mime, name) = RetroService.fitForUpload(png);
       final id = await WebBoardService.share(
         stats: _stats,
         title: draft.$1,
         body: draft.$2,
-        imageBytes: png,
-        imageMime: 'image/png',
-        imageName: 'retro_card.png',
+        imageBytes: bytes,
+        imageMime: mime,
+        imageName: name,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
