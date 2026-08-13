@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../services/account_service.dart';
@@ -7,9 +8,32 @@ import '../services/account_service.dart';
 /// 홈 프로필과 게시판 공유가 함께 쓰는 공용 진입점.
 Future<bool> ensureWebLogin(BuildContext context,
     {String reason = '성과 게시판에 올리려면 로그인이 필요해요.'}) async {
-  final me = await AccountService.instance.me();
+  final me = await AccountService.instance.me(refresh: true);
   if (me != null) return true;
   if (!context.mounted) return false;
+
+  // 브라우저에서는 Custom Tab·구글 원탭을 쓸 수 없으니 로그인 페이지로 이동한다.
+  // 돌아오면 쿠키가 생겨 있어 그때 다시 '공개하기'를 누르면 된다.
+  if (kIsWeb) {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('로그인이 필요해요'),
+        content: Text('$reason\n\n로그인 페이지로 이동합니다. '
+            '로그인하면 이 화면으로 돌아와요.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('로그인하기')),
+        ],
+      ),
+    );
+    if (go == true) AccountService.instance.loginViaPage();
+    return false; // 페이지가 이동하므로 이번 흐름은 여기서 끝난다
+  }
 
   final cs = Theme.of(context).colorScheme;
   final choice = await showModalBottomSheet<String>(

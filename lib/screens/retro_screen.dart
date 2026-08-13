@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
@@ -178,8 +177,9 @@ class _RetroScreenState extends State<RetroScreen> {
                 ),
               ),
             ),
-            // 웹 성과 게시판 업로드 — 로그인은 이때만 필요 (브라우저판은 숨김)
-            if (!kIsWeb) ...[
+            // 성과 게시판 공개 — 로그인은 이때만 필요.
+            // 브라우저에서도 같은 오리진 쿠키로 올릴 수 있어 웹앱에서도 노출한다.
+            ...[
               const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
@@ -192,7 +192,7 @@ class _RetroScreenState extends State<RetroScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.emoji_events_outlined, size: 18),
-                  label: Text(_posting ? '게시판에 올리는 중…' : '웹 게시판에 자랑하기'),
+                  label: Text(_posting ? '게시판에 올리는 중…' : '성과 게시판에 공개하기'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),

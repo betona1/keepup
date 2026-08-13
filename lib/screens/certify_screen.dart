@@ -395,13 +395,13 @@ class _CertifyScreenState extends State<CertifyScreen> {
                 style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(48)),
               ),
-              // 베타 커뮤니티: 매일 인증을 성과 게시판에 올려 서로 응원 (앱 전용)
-              if (!kIsWeb) ...[
+              // 성과 게시판에 올려 서로 응원 — 브라우저에서도 같은 오리진 쿠키로 올라간다
+              ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () => Navigator.pop(sheetCtx, 'board'),
                   icon: const Icon(Icons.emoji_events_outlined, size: 18),
-                  label: const Text('웹 게시판에 자랑하기'),
+                  label: const Text('성과 게시판에 공개하기'),
                   style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(48)),
                 ),

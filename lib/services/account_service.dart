@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'web_nav.dart';
 
 /// keywordream.com 웹 계정 (선택 로그인 — 프로필 표시 + 향후 게시판 연동)
 class WebAccount {
@@ -115,18 +118,25 @@ class AccountService {
   /// 현재 로그인된 웹 계정. 미로그인/만료면 null.
   Future<WebAccount?> me({bool refresh = false}) async {
     if (!refresh && _cached != null) return _cached;
-    final token = await _loadToken();
-    if (token == null) return null;
+    // 브라우저에서는 저장한 토큰이 없다. 웹앱이 log.keywordream.com/app/ 에서 돌기 때문에
+    // 같은 오리진(/api/...)으로 부르면 세션 쿠키가 자동으로 붙는다.
+    // (JS에서는 Cookie 헤더를 직접 넣을 수 없고, main 도메인으로 부르면 cross-origin이 된다)
+    String? token;
+    if (!kIsWeb) {
+      token = await _loadToken();
+      if (token == null) return null;
+    }
     try {
       final res = await http.get(
-        Uri.parse('$_base/api/auth/me'),
-        headers: {'Cookie': 'session=$token'},
+        Uri.parse(kIsWeb ? '/api/auth/me' : '$_base/api/auth/me'),
+        headers: kIsWeb ? const {} : {'Cookie': 'session=$token'},
       ).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return _cached;
       final body = jsonDecode(utf8.decode(res.bodyBytes));
       final user = body?['data']?['user'];
       if (user == null) {
-        await logout(remote: false); // 세션 만료 → 토큰 정리
+        if (!kIsWeb) await logout(remote: false); // 세션 만료 → 토큰 정리
+        _cached = null;
         return null;
       }
       _cached = WebAccount(
@@ -141,7 +151,25 @@ class AccountService {
     }
   }
 
+  /// 브라우저 전용 — main 사이트 로그인 페이지로 페이지를 옮긴다.
+  /// 로그인하면 .keywordream.com 쿠키가 생겨 log.keywordream.com에서도 인식된다.
+  void loginViaPage({String? returnUrl}) {
+    final next = Uri.encodeComponent(returnUrl ?? currentUrl());
+    navigateTo('$_base/login?next=$next');
+  }
+
   Future<void> logout({bool remote = true}) async {
+    if (kIsWeb) {
+      // 웹은 쿠키 세션이므로 같은 오리진의 로그아웃을 부르고 캐시만 비운다
+      _cached = null;
+      if (remote) {
+        await http
+            .post(Uri.parse('/api/auth/logout'))
+            .timeout(const Duration(seconds: 5))
+            .catchError((_) => http.Response('', 499));
+      }
+      return;
+    }
     final token = await _loadToken();
     // 1) 로컬을 먼저 즉시 정리 — 네트워크가 느리거나 실패해도 앱은 곧바로 로그아웃 상태가 된다
     _token = null;

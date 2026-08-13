@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:intl/intl.dart';
@@ -29,15 +30,21 @@ class WebBoardService {
     String imageMime = 'image/png',
     String imageName = 'image.png',
   }) async {
-    final token = await AccountService.instance.sessionToken();
-    if (token == null) {
-      throw StateError('로그인이 필요해요');
+    // 브라우저에서는 저장된 토큰이 없고 Cookie 헤더도 넣을 수 없다.
+    // 웹앱이 log.keywordream.com/app/ 에서 돌기 때문에 같은 오리진(/api/posts)으로 부르면
+    // 세션 쿠키가 자동으로 붙는다. 네이티브는 기존처럼 토큰을 헤더로 넘긴다.
+    String? token;
+    if (!kIsWeb) {
+      token = await AccountService.instance.sessionToken();
+      if (token == null) {
+        throw StateError('로그인이 필요해요');
+      }
     }
 
     final r = stats.routine;
     final d = DateFormat('yyyy-MM-dd');
-    final req = http.MultipartRequest('POST', Uri.parse('$base/api/posts'))
-      ..headers['Cookie'] = 'session=$token'
+    final req = http.MultipartRequest(
+        'POST', Uri.parse(kIsWeb ? '/api/posts' : '$base/api/posts'))
       ..fields['title'] = _clamp(title, 80)
       ..fields['routineType'] =
           r.type == RoutineType.accumulate ? 'stack' : 'goal'
@@ -47,6 +54,7 @@ class WebBoardService {
       ..fields['certCount'] = '${stats.certifiedDays}'
       ..fields['achievedPercent'] = '${stats.percent}'
       ..fields['body'] = _clamp(body, 5000);
+    if (!kIsWeb) req.headers['Cookie'] = 'session=$token';
 
     if (imageBytes != null) {
       final parts = imageMime.split('/');
