@@ -25,10 +25,10 @@ class RetroService {
     }
     final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
 
-    // 첫 프레임에 아직 페인트되지 않았으면 다음 프레임을 기다린다
-    if (boundary.debugNeedsPaint) {
-      await Future<void>.delayed(const Duration(milliseconds: 60));
-    }
+    // 첫 프레임이 페인트되기 전 캡처하면 빈 이미지가 되므로 현재 프레임을 기다린다.
+    // (debugNeedsPaint는 assert 전용 getter라 release 빌드에서 읽으면
+    //  LateInitializationError가 터진다 — 절대 다시 쓰지 말 것)
+    await WidgetsBinding.instance.endOfFrame;
 
     final image = await boundary.toImage(pixelRatio: pixelRatio);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);

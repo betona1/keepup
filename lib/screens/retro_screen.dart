@@ -61,7 +61,8 @@ class _RetroScreenState extends State<RetroScreen> {
     setState(() => _sharing = true);
     try {
       await RetroService.share(_cardKey, _stats);
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[retro] share 실패: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('공유 실패: $e')));
@@ -117,7 +118,8 @@ class _RetroScreenState extends State<RetroScreen> {
           ),
         ),
       );
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[retro] shareToWeb 실패: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
