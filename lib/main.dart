@@ -14,6 +14,8 @@ import 'services/timer_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/certify_screen.dart';
 import 'services/backup_service.dart';
+import 'widgets/cloud_sync_sheet.dart';
+import 'widgets/login_sheet.dart';
 import 'screens/history_screen.dart';
 import 'screens/add_routine_screen.dart';
 import 'screens/notif_settings_screen.dart';
@@ -227,6 +229,21 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// 클라우드 백업 — 로그인한 계정에 기록을 보관/복원한다.
+  /// 기기를 바꾸거나 브라우저 데이터를 지워도 되살릴 수 있다.
+  Future<void> _openCloudSync() async {
+    if (!await ensureWebLogin(context,
+        reason: '기록을 계정에 보관하려면 로그인이 필요해요.')) {
+      return;
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => CloudSyncSheet(state: widget.state),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final titles = ['습관챌린지', '기록 · 추억'];
@@ -254,8 +271,19 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
             onSelected: (v) {
               if (v == 'export') _exportBackup();
               if (v == 'import') _importBackup();
+              if (v == 'cloud') _openCloudSync();
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'cloud',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.cloud_outlined),
+                  title: Text('클라우드 백업 (계정에 보관)'),
+                ),
+              ),
+              PopupMenuDivider(),
               PopupMenuItem(
                 value: 'export',
                 child: ListTile(

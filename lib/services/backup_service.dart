@@ -19,9 +19,9 @@ class BackupService {
   static String _basename(String path) =>
       path.split(RegExp(r'[/\\]')).last;
 
-  /// 모든 데이터를 ZIP으로 만들어 내보낸다.
-  /// 네이티브는 공유 시트(카톡 나에게 보내기·드라이브 등), 웹은 파일 다운로드.
-  static Future<int> exportAndShare(
+  /// 모든 데이터를 백업 ZIP 바이트로 만든다 (data.json + media/*).
+  /// 파일 내보내기와 클라우드 백업이 같은 결과물을 쓰도록 여기서만 만든다.
+  static Future<(Uint8List, int)> buildZip(
       List<Routine> routines, List<Certification> certs) async {
     final archive = Archive();
 
@@ -68,14 +68,20 @@ class BackupService {
     final jsonBytes = utf8.encode(jsonEncode(data));
     archive.addFile(ArchiveFile('data.json', jsonBytes.length, jsonBytes));
 
-    final zipBytes =
-        Uint8List.fromList(ZipEncoder().encode(archive));
+    return (Uint8List.fromList(ZipEncoder().encode(archive)), mediaPaths.length);
+  }
+
+  /// 모든 데이터를 ZIP으로 만들어 내보낸다.
+  /// 네이티브는 공유 시트(카톡 나에게 보내기·드라이브 등), 웹은 파일 다운로드.
+  static Future<int> exportAndShare(
+      List<Routine> routines, List<Certification> certs) async {
+    final (zipBytes, mediaCount) = await buildZip(routines, certs);
     final name =
         'keepup_backup_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.zip';
 
     if (MediaStore.isWeb) {
       await downloadBytes(name, zipBytes, 'application/zip');
-      return mediaPaths.length;
+      return mediaCount;
     }
 
     final tmp = await getTemporaryDirectory();
@@ -83,9 +89,9 @@ class BackupService {
     await zipFile.writeAsBytes(zipBytes);
     await SharePlus.instance.share(ShareParams(
       files: [XFile(zipFile.path)],
-      text: 'KeepUp 백업 (${routines.length}개 루틴, ${certs.length}개 인증)',
+      text: '로그챌린지 백업 (${routines.length}개 루틴, ${certs.length}개 인증)',
     ));
-    return mediaPaths.length;
+    return mediaCount;
   }
 
   /// 백업 ZIP을 선택해 읽는다. 취소하면 null.
@@ -99,7 +105,13 @@ class BackupService {
     final Uint8List? raw = picked.bytes ??
         (picked.path == null ? null : await File(picked.path!).readAsBytes());
     if (raw == null) return null;
+    return readZip(raw);
+  }
 
+  /// 백업 ZIP 바이트를 읽어 루틴·인증으로 되살린다 (미디어는 이 기기 저장소로 복원).
+  /// 파일에서 불러오기와 클라우드에서 내리기가 같은 경로를 쓴다.
+  static Future<(List<Routine>, List<Certification>)> readZip(
+      Uint8List raw) async {
     final archive = ZipDecoder().decodeBytes(raw);
     final dataEntry = archive.findFile('data.json');
     if (dataEntry == null) {
