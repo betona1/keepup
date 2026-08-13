@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -24,10 +26,23 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
   String? _message;
   bool _error = false;
 
+  // '가져오기 요청' 대기 상태 — 다른 기기의 승인(업로드)을 폴링으로 기다린다
+  Timer? _waitTimer;
+  bool _waiting = false;
+  DateTime? _baselineUpdatedAt; // 요청 시점의 백업 시각 (달라지면 = 새로 올라옴)
+  int _waitedSec = 0;
+  static const _waitLimitSec = 5 * 60;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _waitTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -103,6 +118,103 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 다른 기기에 '기록 보내달라' 요청을 남기고, 승인(업로드)되면 자동으로 내려받는다.
+  Future<void> _requestPull() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('다른 기기에서 가져오기'),
+        content: const Text('기록이 있는 기기(폰)에서 앱을 열면 "보낼까요?" 안내가 떠요.\n'
+            '[보내기]를 누르는 순간 이 기기로 자동으로 옮겨지고,\n'
+            '이 기기의 기존 기록은 교체됩니다. 요청할까요?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('요청 보내기')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      _baselineUpdatedAt = _info?.updatedAt;
+      await CloudSyncService.requestPull();
+      setState(() {
+        _waiting = true;
+        _waitedSec = 0;
+      });
+      _waitTimer?.cancel();
+      _waitTimer =
+          Timer.periodic(const Duration(seconds: 3), (_) => _pollTick());
+    } catch (e) {
+      _say('$e'.replaceFirst('Bad state: ', ''), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pollTick() async {
+    if (!mounted || !_waiting) return;
+    _waitedSec += 3;
+
+    final meta = await CloudSyncService.info();
+    if (!mounted || !_waiting) return;
+
+    // 새 백업이 올라왔다 → 승인됨 — 자동으로 내려받아 교체
+    if (meta != null && meta.exists && meta.updatedAt != _baselineUpdatedAt) {
+      _stopWaiting();
+      setState(() => _busy = true);
+      try {
+        final (routines, certs) = await CloudSyncService.download();
+        await widget.state.restoreAll(routines, certs);
+        await CloudSyncService.clearPull();
+        _say('가져왔어요 — 루틴 ${routines.length}개, 인증 ${certs.length}개 🎉');
+        await _load();
+      } catch (e) {
+        _say('$e'.replaceFirst('Bad state: ', ''), error: true);
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
+
+    // 요청이 사라졌는데 새 백업도 없다 → 상대가 거절했거나 만료
+    final req = await CloudSyncService.pendingPull(ignoreMine: false);
+    if (!mounted || !_waiting) return;
+    if (req == null) {
+      _stopWaiting();
+      _say('요청이 거절됐거나 만료됐어요', error: true);
+      return;
+    }
+
+    if (_waitedSec >= _waitLimitSec) {
+      _stopWaiting();
+      await CloudSyncService.clearPull();
+      _say('아직 응답이 없어요 — 기록이 있는 기기에서 앱을 열었는지 확인해 주세요', error: true);
+    } else if (mounted) {
+      setState(() {}); // 경과 시간 갱신
+    }
+  }
+
+  void _stopWaiting() {
+    _waitTimer?.cancel();
+    _waitTimer = null;
+    if (mounted) setState(() => _waiting = false);
+  }
+
+  Future<void> _cancelWait() async {
+    _stopWaiting();
+    await CloudSyncService.clearPull();
+    _say('요청을 취소했어요');
   }
 
   Future<void> _delete() async {
@@ -237,14 +349,9 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                     ]),
                     const SizedBox(height: 8),
                     ...[
-                      kIsWeb
-                          ? '폰에서 로그챌린지 앱을 열고, 같은 계정으로 로그인'
-                          : '기록이 있는 기기에서 로그챌린지를 열고, 같은 계정으로 로그인',
-                      '우측 위 ⋮ → 클라우드 백업',
-                      '[지금 기록 올리기] 누르기',
-                      kIsWeb
-                          ? '여기로 돌아와 [클라우드에서 내려받기]'
-                          : '이 기기에서 [클라우드에서 내려받기]',
+                      '아래 [다른 기기에서 가져오기]로 요청 보내기',
+                      '기록이 있는 기기(폰)에서 앱 열기 (같은 계정 로그인)',
+                      '그 기기에 뜨는 안내에서 [보내기] 누르기 → 자동으로 가져와져요',
                     ].asMap().entries.map((e) => Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Row(
@@ -309,6 +416,54 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
               style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14)),
             ),
+            const SizedBox(height: 8),
+            // 다른 기기에 승인 요청 → 자동으로 받아오기 (대기 중엔 취소 카드로 전환)
+            if (_waiting)
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border:
+                      Border.all(color: cs.primary.withValues(alpha: 0.4)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '요청을 보냈어요 (${_waitedSec ~/ 60}분 ${_waitedSec % 60}초)\n'
+                            '기록이 있는 기기에서 앱을 열고 [보내기]를 누르면 자동으로 가져와요.',
+                            style: const TextStyle(
+                                fontSize: 12.5,
+                                height: 1.4,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _cancelWait,
+                      child: const Text('요청 취소'),
+                    ),
+                  ],
+                ),
+              )
+            else
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _requestPull,
+                icon: const Icon(Icons.devices_other_outlined, size: 18),
+                label: Text(kIsWeb ? '폰에서 가져오기 (승인 요청)' : '다른 기기에서 가져오기 (승인 요청)'),
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+              ),
             if (info?.exists == true) ...[
               const SizedBox(height: 4),
               TextButton(

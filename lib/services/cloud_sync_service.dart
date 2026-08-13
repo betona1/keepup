@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/routine.dart';
 import 'account_service.dart';
@@ -138,4 +140,78 @@ class CloudSyncService {
         .timeout(const Duration(seconds: 20));
     if (res.statusCode != 200) _fail(res.statusCode, null);
   }
+
+  // ── 기기 간 '가져오기 요청' ──────────────────────────────────────
+  // 이 기기에서 요청을 남기면, 기록이 있는 다른 기기의 앱이 열릴 때
+  // 승인 안내가 뜨고 [보내기]로 올려 준다. 그러면 이쪽이 자동으로 내려받는다.
+
+  static const _clientIdKey = 'sync_client_id_v1';
+
+  /// 이 설치(기기/브라우저)의 무작위 식별자 — 내가 보낸 요청에 내가 승인 창을
+  /// 띄우지 않기 위한 구분용. 개인정보가 아니다.
+  static Future<String> clientId() async {
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString(_clientIdKey);
+    if (id == null) {
+      final rnd = Random();
+      id = List.generate(16, (_) => rnd.nextInt(16).toRadixString(16)).join();
+      await prefs.setString(_clientIdKey, id);
+    }
+    return id;
+  }
+
+  /// 다른 기기에 '기록 보내달라'는 요청을 남긴다 (15분 뒤 자동 소멸)
+  static Future<void> requestPull() async {
+    final res = await http
+        .post(
+          _uri('/api/sync/request'),
+          headers: {
+            ...await _headers(),
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'clientId': await clientId()}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) _fail(res.statusCode, null);
+  }
+
+  /// 대기 중인 가져오기 요청. 없거나 미로그인이면 null.
+  /// [ignoreMine]이 true면 이 기기가 보낸 요청은 없는 것으로 친다 (승인 창용).
+  static Future<PullRequestInfo?> pendingPull({bool ignoreMine = true}) async {
+    try {
+      final res = await http
+          .get(_uri('/api/sync/request'), headers: await _headers())
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode != 200) return null;
+      final json =
+          jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final d = json['data'] as Map<String, dynamic>?;
+      if (d == null || d['pending'] != true) return null;
+      final info = PullRequestInfo(
+        clientId: d['clientId'] as String? ?? '',
+        requestedAt:
+            DateTime.tryParse(d['requestedAt'] as String? ?? '')?.toLocal(),
+      );
+      if (ignoreMine && info.clientId == await clientId()) return null;
+      return info;
+    } catch (_) {
+      return null; // 오프라인 등 — 요청 확인은 조용히 건너뛴다
+    }
+  }
+
+  /// 요청 지우기 (취소·거절·완료 후 정리). 실패해도 무시 — TTL로 소멸한다.
+  static Future<void> clearPull() async {
+    try {
+      await http
+          .delete(_uri('/api/sync/request'), headers: await _headers())
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {/* 무시 */}
+  }
+}
+
+/// 대기 중인 '가져오기 요청' 정보
+class PullRequestInfo {
+  final String clientId;
+  final DateTime? requestedAt;
+  const PullRequestInfo({required this.clientId, this.requestedAt});
 }

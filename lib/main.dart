@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -14,6 +15,7 @@ import 'services/timer_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/certify_screen.dart';
 import 'services/backup_service.dart';
+import 'services/cloud_sync_service.dart';
 import 'widgets/cloud_sync_sheet.dart';
 import 'widgets/login_sheet.dart';
 import 'screens/history_screen.dart';
@@ -115,6 +117,10 @@ class RootScreen extends StatefulWidget {
 class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   int _index = 0;
 
+  // '가져오기 요청' 승인 안내 — 중복 표시·과잉 폴링 방지
+  bool _pullDialogOpen = false;
+  DateTime _lastPullCheck = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +129,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     TimerService.instance.onComplete = _onTimerComplete;
     // 인트로가 도는 사이에 목표를 채웠을 수도 있으니 한 번 점검한다
     TimerService.instance.checkCompletion();
+    // 다른 기기가 '기록 보내달라'고 요청해 뒀는지 확인 (로그인 상태에서만 의미)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPullRequest());
     // 자동 스냅샷으로 데이터를 되살렸으면 사용자에게 알린다
     if (widget.state.restoredFromAutosave) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -155,6 +163,68 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
           .then((_) => TimerService.instance.rearmNotification());
       // 백그라운드에서 타이머가 목표를 채웠는지 점검 → 완료면 자동 도장
       TimerService.instance.checkCompletion();
+      // 다른 기기의 '가져오기 요청'도 이때 확인 (푸시 없이 열 때마다 폴링)
+      _checkPullRequest();
+    }
+  }
+
+  /// 다른 기기(웹 등)가 남긴 '기록 보내달라' 요청을 확인하고 승인 안내를 띄운다.
+  Future<void> _checkPullRequest() async {
+    if (_pullDialogOpen) return;
+    final now = DateTime.now();
+    if (now.difference(_lastPullCheck) < const Duration(seconds: 8)) return;
+    _lastPullCheck = now;
+
+    final req = await CloudSyncService.pendingPull(); // 내 요청·미로그인은 null
+    if (req == null || !mounted) return;
+
+    final routines = widget.state.routines;
+    final certs = widget.state.certs;
+    final timeLabel = req.requestedAt != null
+        ? DateFormat('HH:mm').format(req.requestedAt!)
+        : '';
+
+    _pullDialogOpen = true;
+    try {
+      final send = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('🌐 기록 가져오기 요청'),
+          content: Text(
+            '다른 기기(웹/폰)에서 이 계정으로 기록을 보내달라고 요청했어요'
+            '${timeLabel.isNotEmpty ? ' ($timeLabel)' : ''}.\n\n'
+            '${routines.isEmpty && certs.isEmpty ? '그런데 이 기기에는 보낼 기록이 없어요. 요청을 지울까요?' : '지금 이 기기의 기록(루틴 ${routines.length}개 · 인증 ${certs.length}개)을 보낼까요?\n요청한 기기가 자동으로 받아 가요.'}',
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('거절')),
+            if (routines.isNotEmpty || certs.isNotEmpty)
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('보내기')),
+          ],
+        ),
+      );
+      if (send == true && mounted) {
+        try {
+          await CloudSyncService.upload(routines, certs);
+          await CloudSyncService.clearPull();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('보냈어요 — 요청한 기기가 곧 받아 가요 ✅')));
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('$e'.replaceFirst('Bad state: ', ''))));
+          }
+        }
+      } else if (send == false) {
+        await CloudSyncService.clearPull(); // 거절 → 요청 제거 (상대에게 알려짐)
+      }
+    } finally {
+      _pullDialogOpen = false;
     }
   }
 
