@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -66,12 +67,24 @@ class WebBoardService {
       ));
     }
 
-    final res = await http.Response.fromStream(
-        await req.send().timeout(const Duration(seconds: 30)));
+    // 이미지 수 MB를 느린 회선으로 올리는 경우를 감안한 여유 (기존 30초)
+    final http.Response res;
+    try {
+      res = await http.Response.fromStream(
+          await req.send().timeout(const Duration(seconds: 90)));
+    } on TimeoutException {
+      throw StateError('업로드가 너무 오래 걸려요. 네트워크를 확인하고 다시 시도해 주세요');
+    }
     if (res.statusCode == 401) {
       throw StateError('세션이 만료됐어요. 다시 로그인해 주세요');
     }
-    final json = jsonDecode(utf8.decode(res.bodyBytes));
+    // Cloudflare 5xx 오류 페이지 등 JSON이 아닌 응답이 그대로 노출되지 않도록
+    dynamic json;
+    try {
+      json = jsonDecode(utf8.decode(res.bodyBytes));
+    } on FormatException {
+      throw StateError('서버가 응답하지 않아요 (${res.statusCode}). 잠시 후 다시 시도해 주세요');
+    }
     if (res.statusCode != 200 || json?['ok'] != true) {
       throw StateError('업로드 실패 (${json?['error'] ?? res.statusCode})');
     }
