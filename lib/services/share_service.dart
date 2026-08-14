@@ -9,12 +9,13 @@ import 'media_store.dart';
 /// (사용자가 직접 카카오톡 오픈채팅방 등 대상을 골라 전송 — 완전 합법)
 class ShareService {
   /// 앱 다운로드(홍보) 링크 — 공유할 때마다 자연스럽게 붙어 앱이 알려진다.
-  /// 스토어 출시 후 Play/App Store URL로 교체 가능.
-  static const appLink = 'https://keepup.keywordream.com';
+  /// 2026-08-14 Play 출시 → 스토어 설치 링크로 교체 (탭하면 바로 설치 페이지).
+  static const appLink =
+      'https://play.google.com/store/apps/details?id=com.keywordream.keepup';
 
   /// 인증 문구 끝에 붙는 홍보 서명
   static String get _promoFooter =>
-      '\n———\n📱 습관 인증 챌린지 앱 「Log Challenge」\n나도 도장 찍으며 습관 만들기 👉 $appLink';
+      '\n———\n📱 습관 인증 챌린지 앱 「로그챌린지」\n나도 습관도장 찍으러 가기 👉 $appLink';
 
   static Future<void> shareCertification({
     required Certification cert,

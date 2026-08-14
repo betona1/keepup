@@ -14,6 +14,7 @@ import '../widgets/cloud_sync_sheet.dart';
 import '../widgets/marquee_text.dart';
 import '../widgets/routine_icon.dart';
 import 'certify_screen.dart';
+import 'change_routine_screen.dart';
 import 'history_screen.dart' show showCertDetail;
 import 'retro_screen.dart';
 
@@ -1024,6 +1025,7 @@ class _RoutineCard extends StatelessWidget {
   }
 
   void _showManageSheet(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
       builder: (_) => SafeArea(
@@ -1038,6 +1040,23 @@ class _RoutineCard extends StatelessWidget {
                   '${routine.reason.isNotEmpty ? '\n"${routine.reason}"' : ''}'),
             ),
             const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.swap_horiz_rounded),
+              title: const Text('루틴 변경 (다치거나 사정이 생겼을 때)'),
+              subtitle: Text(
+                  '제목·인증 방식 변경, 최대 ${AppState.maxRoutineChanges}회 · '
+                  '${routine.changeUsedCount}회 사용 · 이력 확인'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ChangeRoutineScreen(state: state, routine: routine),
+                  ),
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.event_available),
               title: const Text('시작일 변경'),
@@ -1085,29 +1104,51 @@ class _RoutineCard extends StatelessWidget {
               },
             ),
             const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('루틴 삭제'),
-              onTap: () async {
-                Navigator.pop(context);
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('삭제할까요?'),
-                    content: const Text('이 루틴과 인증 기록이 함께 삭제됩니다.'),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('취소')),
-                      FilledButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('삭제')),
-                    ],
-                  ),
-                );
-                if (ok == true) await state.deleteRoutine(routine.id);
-              },
-            ),
+            // 도장을 한 번이라도 찍은 루틴은 삭제 불가 — 기록은 자산이니까.
+            // (잘못 찍은 도장은 인증 삭제로 정리한 뒤에야 루틴을 지울 수 있다)
+            Builder(builder: (sheetCtx) {
+              final hasStamp =
+                  state.certsForRoutine(routine.id).isNotEmpty;
+              return ListTile(
+                leading: Icon(
+                    hasStamp ? Icons.lock_outline : Icons.delete_outline,
+                    color: hasStamp ? null : cs.error),
+                title: Text(hasStamp ? '루틴 삭제 (도장 기록 보호 중)' : '루틴 삭제',
+                    style: hasStamp
+                        ? null
+                        : TextStyle(color: cs.error)),
+                subtitle: hasStamp
+                    ? const Text('도장을 찍은 루틴은 지울 수 없어요 — '
+                        '기록이 소중하니까요. (인증을 모두 삭제하면 지울 수 있어요)')
+                    : null,
+                onTap: () async {
+                  if (hasStamp) {
+                    Navigator.pop(sheetCtx);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text(
+                            '도장을 찍은 루틴은 삭제할 수 없어요 🔒 기록을 지키는 중!')));
+                    return;
+                  }
+                  Navigator.pop(sheetCtx);
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('삭제할까요?'),
+                      content: const Text('아직 도장이 없는 루틴이라 깨끗이 삭제됩니다.'),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('취소')),
+                        FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('삭제')),
+                      ],
+                    ),
+                  );
+                  if (ok == true) await state.deleteRoutine(routine.id);
+                },
+              );
+            }),
           ],
         ),
       ),

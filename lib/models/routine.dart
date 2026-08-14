@@ -88,6 +88,48 @@ String dateKeyOf(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+/// 루틴 변경 이력 한 건 — 언제, 무엇이(제목·인증방식) 어떻게 바뀌었는지.
+/// 부상 등으로 잠시 가벼운 루틴으로 바꿨다가 다시 도전하는 과정을 그대로 남긴다.
+class RoutineChange {
+  final DateTime at; // 변경 시각
+  final String beforeTitle;
+  final String afterTitle;
+  final VerifyMethod beforeMethod;
+  final VerifyMethod afterMethod;
+  final String? note; // 변경 사유 (예: "허리 부상으로 잠시 가볍게")
+
+  const RoutineChange({
+    required this.at,
+    required this.beforeTitle,
+    required this.afterTitle,
+    required this.beforeMethod,
+    required this.afterMethod,
+    this.note,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toIso8601String(),
+        'beforeTitle': beforeTitle,
+        'afterTitle': afterTitle,
+        'beforeMethod': beforeMethod.name,
+        'afterMethod': afterMethod.name,
+        'note': note,
+      };
+
+  factory RoutineChange.fromJson(Map<String, dynamic> j) => RoutineChange(
+        at: DateTime.parse(j['at'] as String),
+        beforeTitle: j['beforeTitle'] as String? ?? '',
+        afterTitle: j['afterTitle'] as String? ?? '',
+        beforeMethod: j['beforeMethod'] != null
+            ? VerifyMethod.values.byName(j['beforeMethod'] as String)
+            : VerifyMethod.photo,
+        afterMethod: j['afterMethod'] != null
+            ? VerifyMethod.values.byName(j['afterMethod'] as String)
+            : VerifyMethod.photo,
+        note: j['note'] as String?,
+      );
+}
+
 /// 하나의 루틴(습관 선언)
 class Routine {
   final String id;
@@ -108,7 +150,8 @@ class Routine {
   final int? windowEndMin; // 인증 마감 시각 — 설정 시 이 시각이 그날의 마감이 된다
   final DateTime startDate; // 시즌 시작일 (날짜만)
   final DateTime endDate; // 완료 목표일 (기본: 시작 +62일 = 63일간)
-  int changeUsedCount; // 루틴 변경 찬스 사용 횟수 (0 또는 1)
+  int changeUsedCount; // 루틴 변경 찬스 사용 횟수 (최대 2회)
+  final List<RoutineChange> changeLog; // 변경 이력 (날짜별 before→after)
   String? iconPath; // 사용자 지정 아이콘 사진 (MediaStore 경로, null = 기본 아이콘)
 
   Routine({
@@ -131,6 +174,7 @@ class Routine {
     DateTime? startDate,
     DateTime? endDate,
     this.changeUsedCount = 0,
+    this.changeLog = const [],
     this.iconPath,
   })  : startDate = _dateOnly(startDate ?? createdAt),
         endDate = _dateOnly(
@@ -267,6 +311,7 @@ class Routine {
         'startDate': startDate.toIso8601String(),
         'endDate': endDate.toIso8601String(),
         'changeUsedCount': changeUsedCount,
+        'changeLog': changeLog.map((c) => c.toJson()).toList(),
         'iconPath': iconPath,
       };
 
@@ -299,6 +344,11 @@ class Routine {
             ? DateTime.parse(j['endDate'] as String)
             : null,
         changeUsedCount: (j['changeUsedCount'] as num?)?.toInt() ?? 0,
+        changeLog: (j['changeLog'] as List?)
+                ?.map((e) =>
+                    RoutineChange.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
         iconPath: j['iconPath'] as String?,
       );
 }

@@ -68,19 +68,43 @@ class AppState extends ChangeNotifier {
     await _persistAndSync();
   }
 
-  Future<void> deleteRoutine(String routineId) async {
+  /// 루틴 삭제 — 도장(인증)이 하나라도 있으면 지우지 않는다 (기록 보호).
+  /// 잘못 찍은 도장은 인증 삭제로 먼저 정리해야 한다. 성공 시 true.
+  Future<bool> deleteRoutine(String routineId) async {
+    if (certs.any((c) => c.routineId == routineId)) return false;
     routines = routines.where((r) => r.id != routineId).toList();
-    certs = certs.where((c) => c.routineId != routineId).toList();
     await _persistAndSync();
+    return true;
   }
 
-  /// 기간 내 루틴 변경 찬스 (인당 1회). 성공 시 true.
-  Future<bool> changeRoutine(String routineId,
-      {required String newTitle, String? newTarget, String? newBackup}) async {
+  /// 루틴 변경에 쓸 수 있는 찬스 (기간 내 최대 2회 — 부상 등으로
+  /// 가벼운 루틴으로 바꿨다가 회복 후 다시 도전하는 왕복을 지원한다)
+  static const maxRoutineChanges = 2;
+
+  /// 기간 내 루틴 변경. 제목·인증 방식을 바꿀 수 있고, 변경 이력이
+  /// [Routine.changeLog]에 날짜와 함께 남는다. 성공 시 true.
+  Future<bool> changeRoutine(
+    String routineId, {
+    required String newTitle,
+    VerifyMethod? newMethod,
+    int? newTimerMinutes,
+    String? newTarget,
+    String? newBackup,
+    String? note,
+  }) async {
     final idx = routines.indexWhere((r) => r.id == routineId);
     if (idx < 0) return false;
     final r = routines[idx];
-    if (r.changeUsedCount >= 1) return false; // 이미 변경 찬스 소진
+    if (r.changeUsedCount >= maxRoutineChanges) return false; // 찬스 소진
+
+    final entry = RoutineChange(
+      at: DateTime.now(),
+      beforeTitle: r.title,
+      afterTitle: newTitle,
+      beforeMethod: r.verifyMethod,
+      afterMethod: newMethod ?? r.verifyMethod,
+      note: (note?.trim().isEmpty ?? true) ? null : note!.trim(),
+    );
 
     routines[idx] = Routine(
       id: r.id,
@@ -91,8 +115,8 @@ class AppState extends ChangeNotifier {
       backupTitle: newBackup ?? r.backupTitle,
       targetValue: newTarget ?? r.targetValue,
       createdAt: r.createdAt,
-      verifyMethod: r.verifyMethod,
-      timerMinutes: r.timerMinutes,
+      verifyMethod: newMethod ?? r.verifyMethod,
+      timerMinutes: newTimerMinutes ?? r.timerMinutes,
       targetSteps: r.targetSteps,
       dueWeekday: r.dueWeekday,
       mediaSource: r.mediaSource,
@@ -102,6 +126,7 @@ class AppState extends ChangeNotifier {
       startDate: r.startDate,
       endDate: r.endDate,
       changeUsedCount: r.changeUsedCount + 1,
+      changeLog: [...r.changeLog, entry],
       iconPath: r.iconPath,
     );
     routines = [...routines];
@@ -137,6 +162,7 @@ class AppState extends ChangeNotifier {
       startDate: r.startDate,
       endDate: newEnd,
       changeUsedCount: r.changeUsedCount,
+      changeLog: r.changeLog,
       iconPath: r.iconPath,
     );
     routines = [...routines];
@@ -175,6 +201,7 @@ class AppState extends ChangeNotifier {
       startDate: ns,
       endDate: newEnd,
       changeUsedCount: r.changeUsedCount,
+      changeLog: r.changeLog,
       iconPath: r.iconPath,
     );
     routines = [...routines];
