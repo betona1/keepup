@@ -1,0 +1,33 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; }
+body {
+  font-family: 'Malgun Gothic', sans-serif;
+  background:
+    radial-gradient(900px 700px at 15% -5%, rgba(43,109,246,0.28), transparent 60%),
+    radial-gradient(900px 800px at 108% 30%, rgba(124,92,255,0.25), transparent 55%),
+    radial-gradient(700px 600px at 50% 115%, rgba(63,169,255,0.18), transparent 60%),
+    linear-gradient(165deg, #131A2B 0%, #0B1020 55%, #140F2E 100%);
+  color: #fff;
+  position: relative;
+}
+.stars { position: absolute; inset: 0; }
+.stars i { position: absolute; border-radius: 50%; background: #fff; opacity: .8;
+  box-shadow: 0 0 8px 2px rgba(124,247,255,.55); }
+.header { padding: 96px 80px 0; position: relative; z-index: 2; text-align: center; }
+.badge { display: inline-block; padding: 10px 26px; border-radius: 999px;
+  background: linear-gradient(90deg, #7C5CFF, #3FA9FF); font-size: 26px; font-weight: 700;
+  letter-spacing: 1px; margin-bottom: 28px; }
+h1 { font-size: 72px; font-weight: 800; line-height: 1.28; letter-spacing: -1px; }
+h1 .accent { color: #7ED3FF; }
+h1 .gold { color: #FFC24D; }
+.sub { margin-top: 22px; font-size: 32px; color: #A9B7D0; font-weight: 600; }
+.phone-wrap { position: relative; margin: 56px auto 0; width: 764px; z-index: 2; }
+.phone { width: 764px; height: 1340px; border-radius: 48px; border: 12px solid #232F45;
+  overflow: hidden; background: #0B0F1A;
+  box-shadow: 0 40px 110px rgba(0,0,0,.65), 0 0 90px rgba(63,169,255,.28); }
+.phone img.shot { width: 740px; display: block; }
+.avatar-cover { position: absolute; border-radius: 50%; overflow: hidden;
+  background: #1A2436; border: 3px solid #3FA9FF; z-index: 5; }
+.avatar-cover img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.25); }
+.foot { position: absolute; bottom: 46px; width: 100%; text-align: center;
+  font-size: 26px; color: #6F7E9C; font-weight: 600; z-index: 2; letter-spacing: .5px; }
