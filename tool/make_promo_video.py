@@ -162,6 +162,9 @@ PHONE_SCENES = [
     ("05_alarm.png",
      [[("미룰수록", WHITE)], [("세지는 알람", VIOLET)]],
      "마감 3·1·0.5시간 전 — 놓치면 하나 더"),
+    ("06_share.png",
+     [[("찍은 도장은", WHITE)], [("자랑", BLUE), ("해야 제맛", WHITE)]],
+     "카톡·인스타로 공유하고, 성과 게시판에서 응원받으세요"),
 ]
 PHONES = {s[0]: rounded_phone(f"{SRC}\\{s[0]}") for s in PHONE_SCENES}
 
@@ -370,7 +373,7 @@ make_audio(AUDIO, TOTAL)
 print("BGM 생성 완료")
 
 # ── 인코딩 ──
-out_mp4 = OUT_DIR + r"\promo_35s.mp4"
+out_mp4 = OUT_DIR + r"\promo_40s.mp4"
 proc = subprocess.Popen(
     ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
      "-r", str(FPS), "-i", "-", "-i", AUDIO,
