@@ -1,14 +1,19 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: 1080px; height: 1920px; overflow: hidden; }
-body {
-  font-family: 'Malgun Gothic', sans-serif;
+/* 배경은 html이 전체 화면을 칠하고, 1080x1920 캔버스(body)는 scale.js가
+   창 크기에 맞춰 확대·중앙 정렬한다 — 태블릿 해상도 재활용용 */
+html { width: 100%; height: 100%; overflow: hidden;
   background:
     radial-gradient(900px 700px at 15% -5%, rgba(43,109,246,0.28), transparent 60%),
     radial-gradient(900px 800px at 108% 30%, rgba(124,92,255,0.25), transparent 55%),
     radial-gradient(700px 600px at 50% 115%, rgba(63,169,255,0.18), transparent 60%),
-    linear-gradient(165deg, #131A2B 0%, #0B1020 55%, #140F2E 100%);
+    linear-gradient(165deg, #131A2B 0%, #0B1020 55%, #140F2E 100%); }
+body {
+  width: 1080px; height: 1920px; overflow: hidden;
+  font-family: 'Malgun Gothic', sans-serif;
+  background: transparent;
   color: #fff;
   position: relative;
+  transform-origin: top left;
 }
 .stars { position: absolute; inset: 0; }
 .stars i { position: absolute; border-radius: 50%; background: #fff; opacity: .8;
