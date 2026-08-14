@@ -45,3 +45,6 @@ app.*.map.json
 /android/app/release
 
 # 스토어 스크린샷은 store_assets에 유지 (원본 스샷 제외)
+
+# Gradle build output (android root)
+/android/build/

@@ -55,3 +55,9 @@ https://log.keywordream.com
                    Play Console > 스토어 등록정보 > '프로모션 동영상'에 입력.
    (Play 스토어는 유튜브 링크만 받으며, 가로 영상이 스토어에서 보기 좋음)
 3) 같은 영상을 인스타 릴스·틱톡에도 그대로 올릴 수 있음 (쇼츠판 사용).
+
+
+구글 스토어 설치하기
+https://play.google.com/store/apps/details?id=com.keywordream.keepup&hl=ko
+웹PWA/아이폰용
+https://log.keywordream.com/app/
