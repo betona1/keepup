@@ -68,6 +68,33 @@ class HabitApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
+      // 데스크톱 브라우저에서 창 폭을 따라 무한정 넓어지지 않게 —
+      // 폰 폭(520)으로 가운데 정렬하고 양옆은 브랜드 네이비로 채운다.
+      // 다이얼로그·바텀시트도 이 안에서 뜨므로 함께 적당한 크기가 된다.
+      builder: (context, child) {
+        if (!kIsWeb) return child!;
+        return LayoutBuilder(builder: (context, constraints) {
+          const maxW = 520.0;
+          if (constraints.maxWidth <= maxW) return child!;
+          final mq = MediaQuery.of(context);
+          return ColoredBox(
+            color: AppTheme.navyDeep,
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: maxW),
+                decoration: const BoxDecoration(boxShadow: [
+                  BoxShadow(color: Colors.black45, blurRadius: 40),
+                ]),
+                // 화면 코드가 MediaQuery로 폭을 읽어도 실제 폭과 맞도록 보정
+                child: MediaQuery(
+                  data: mq.copyWith(size: Size(maxW, mq.size.height)),
+                  child: child!,
+                ),
+              ),
+            ),
+          );
+        });
+      },
       home: _Entry(state: state),
     );
   }
