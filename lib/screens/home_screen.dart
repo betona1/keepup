@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -46,8 +48,10 @@ class HomeBody extends StatelessWidget {
             .length;
         final photos = state.recentPhotoCerts(); // 전체 — 갤러리가 아래로 쭉 이어진다
         final ended = state.endedRoutines(today);
+        // 4단계부터 홈 전체에 레벨 오라가 깔린다 (4 골드 / 5 코스믹)
+        final auraLevel = state.maxStampLevel();
 
-        return ListView(
+        final list = ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
           children: [
             _GreetingHeader(today: today, state: state),
@@ -131,9 +135,183 @@ class HomeBody extends StatelessWidget {
             ],
           ],
         );
+
+        if (auraLevel < 4) return list;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _LevelAuraPainter(
+                    level: auraLevel,
+                    dark: Theme.of(context).brightness == Brightness.dark,
+                  ),
+                ),
+              ),
+            ),
+            list,
+          ],
+        );
       },
     );
   }
+}
+
+/// 레벨 카드 테두리 — 2·3단계는 정적 그라데이션, 4단계는 3색 플레임,
+/// 5단계는 오로라 그라데이션이 테두리를 따라 천천히 도는 애니메이션 (최고 단계의 품격).
+class _LevelCardFrame extends StatefulWidget {
+  final int level;
+  final Widget child;
+  const _LevelCardFrame({required this.level, required this.child});
+
+  @override
+  State<_LevelCardFrame> createState() => _LevelCardFrameState();
+}
+
+class _LevelCardFrameState extends State<_LevelCardFrame>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.level >= 5) {
+      _ctrl = AnimationController(
+          vsync: this, duration: const Duration(seconds: 6))
+        ..repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  BoxDecoration _decoration(List<Color> colors, double t) => BoxDecoration(
+        borderRadius: BorderRadius.circular(21.5),
+        gradient: widget.level >= 5
+            // 오로라가 테두리를 따라 흐른다
+            ? SweepGradient(
+                colors: [...colors, colors.first],
+                transform: GradientRotation(t * 2 * math.pi),
+              )
+            : LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: colors,
+              ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.last.withValues(
+                alpha: widget.level >= 4 ? 0.40 : (widget.level >= 3 ? 0.32 : 0.18)),
+            blurRadius: widget.level >= 4 ? 20 : (widget.level >= 3 ? 16 : 10),
+            offset: const Offset(0, 4),
+          ),
+          if (widget.level >= 5)
+            BoxShadow(
+              color: colors.first.withValues(alpha: 0.30),
+              blurRadius: 24,
+              offset: const Offset(0, -2),
+            ),
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppTheme.stampRingColors(widget.level);
+    final pad = EdgeInsets.all(widget.level >= 5 ? 2.4 : widget.level >= 4 ? 2.0 : 1.6);
+    final ctrl = _ctrl;
+    if (ctrl == null) {
+      return Container(
+        decoration: _decoration(colors, 0),
+        padding: pad,
+        child: widget.child,
+      );
+    }
+    return AnimatedBuilder(
+      animation: ctrl,
+      builder: (_, child) => Container(
+        decoration: _decoration(colors, ctrl.value),
+        padding: pad,
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+/// 4·5단계 홈 배경 오라 — 화면 곳곳에 은은한 빛 무리가 깔린다.
+/// 4단계: 초사이언 골드 기운 / 5단계: 코스믹 오로라 + 별가루 (최고로 화려하게)
+class _LevelAuraPainter extends CustomPainter {
+  final int level;
+  final bool dark;
+  const _LevelAuraPainter({required this.level, required this.dark});
+
+  // 별가루 위치 (화면 비율 좌표, 매 프레임 같은 자리 — 깜빡임 없음)
+  static const _stars = [
+    (0.08, 0.10, 1.6), (0.22, 0.04, 1.0), (0.38, 0.13, 1.3),
+    (0.55, 0.06, 1.0), (0.72, 0.11, 1.8), (0.88, 0.05, 1.1),
+    (0.94, 0.20, 1.4), (0.12, 0.30, 1.0), (0.83, 0.34, 1.2),
+    (0.05, 0.52, 1.5), (0.93, 0.55, 1.0), (0.15, 0.72, 1.2),
+    (0.87, 0.76, 1.6), (0.45, 0.88, 1.0), (0.70, 0.93, 1.3),
+    (0.25, 0.95, 1.1),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strength = dark ? 1.0 : 0.55; // 라이트 모드에선 은은하게
+    List<(Alignment, Color, double)> blobs;
+    if (level >= 5) {
+      blobs = [
+        (Alignment.topRight, const Color(0xFF7C5CFF), 0.20),
+        (Alignment.topLeft, const Color(0xFF3FA9FF), 0.14),
+        (Alignment.centerRight, const Color(0xFF7CF7FF), 0.10),
+        (Alignment.bottomLeft, const Color(0xFF9E7BFF), 0.14),
+      ];
+    } else {
+      blobs = [
+        (Alignment.topRight, const Color(0xFFFFC24D), 0.16),
+        (Alignment.topLeft, const Color(0xFFFF9A3D), 0.10),
+        (Alignment.bottomRight, const Color(0xFFFFE066), 0.09),
+      ];
+    }
+
+    for (final (align, color, alpha) in blobs) {
+      final center = Offset(
+        size.width * (align.x + 1) / 2,
+        size.height * (align.y + 1) / 2,
+      );
+      final radius = size.width * 0.75;
+      final paint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            color.withValues(alpha: alpha * strength),
+            color.withValues(alpha: 0),
+          ],
+        ).createShader(Rect.fromCircle(center: center, radius: radius));
+      canvas.drawCircle(center, radius, paint);
+    }
+
+    // 5단계 전용 별가루 — 우주에 온 듯한 마무리
+    if (level >= 5) {
+      final starPaint = Paint()
+        ..color = (dark ? Colors.white : const Color(0xFF7C5CFF))
+            .withValues(alpha: dark ? 0.55 : 0.30);
+      final glowPaint = Paint()
+        ..color = const Color(0xFF7CF7FF).withValues(alpha: dark ? 0.30 : 0.15)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      for (final (fx, fy, r) in _stars) {
+        final o = Offset(size.width * fx, size.height * fy);
+        canvas.drawCircle(o, r * 2.4, glowPaint);
+        canvas.drawCircle(o, r, starPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LevelAuraPainter old) =>
+      old.level != level || old.dark != dark;
 }
 
 /// 인사 + 날짜 + 웹 계정 프로필 (Stitch 대시보드 헤더)
@@ -691,9 +869,11 @@ class _RoutineCard extends StatelessWidget {
             .where((c) => c.dateKey == dateKeyOf(effDay))
             .length
         : 0;
-    // 도장 레벨 — 7일 도장 = 2단계, 21일 = 3단계. 카드가 함께 화려해진다.
+    // 도장 레벨 — 1주 2단계 · 3주 3단계 · 6주 4단계 · 10주 5단계. 카드가 함께 화려해진다.
     final level = state.levelFor(routine.id);
     final ringColors = AppTheme.stampRingColors(level);
+    // 4·5단계는 원화 4장을 돌려 쓴다 — 날마다 바브바브 포즈가 바뀐다
+    final variant = AppTheme.dailyVariant();
 
     final card = Card(
       clipBehavior: Clip.antiAlias,
@@ -715,7 +895,8 @@ class _RoutineCard extends StatelessWidget {
               // 좌측: 아이콘 타일 — 탭하면 인증사진/갤러리 사진으로 꾸미기
               GestureDetector(
                 onTap: () => showRoutineIconPicker(context, state, routine),
-                child: RoutineIconTile(routine: routine, level: level),
+                child: RoutineIconTile(
+                    routine: routine, level: level, variant: variant),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -739,7 +920,7 @@ class _RoutineCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        // 2단계부터 레벨 배지 (도장 링과 같은 그라데이션)
+                        // 2단계부터 레벨 배지 (도장 링과 같은 그라데이션, 4단계부터 발광)
                         if (level >= 2) ...[
                           const SizedBox(width: 6),
                           Container(
@@ -748,13 +929,24 @@ class _RoutineCard extends StatelessWidget {
                             decoration: BoxDecoration(
                               gradient: LinearGradient(colors: ringColors),
                               borderRadius: BorderRadius.circular(999),
+                              boxShadow: level >= 4
+                                  ? [
+                                      BoxShadow(
+                                        color: ringColors.last
+                                            .withValues(alpha: 0.55),
+                                        blurRadius: 8,
+                                      ),
+                                    ]
+                                  : null,
                             ),
                             child: Text(
-                              level >= 3 ? '👑 3단계' : '⭐ 2단계',
-                              style: const TextStyle(
+                              AppTheme.levelBadge(level),
+                              style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w800,
-                                color: Colors.white,
+                                color: level == 4
+                                    ? const Color(0xFF4A2E00)
+                                    : Colors.white,
                               ),
                             ),
                           ),
@@ -799,13 +991,15 @@ class _RoutineCard extends StatelessWidget {
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        StampButton(certified: true, level: level),
+                        StampButton(
+                            certified: true, level: level, variant: variant),
                         const SizedBox(height: 2),
                         Icon(Icons.add_circle,
                             size: 18, color: cs.primary),
                       ],
                     )
-                  : StampButton(certified: certified, level: level),
+                  : StampButton(
+                      certified: certified, level: level, variant: variant),
             ],
           ),
         ),
@@ -813,27 +1007,9 @@ class _RoutineCard extends StatelessWidget {
     );
 
     // 2단계부터 카드 테두리가 레벨 색 그라데이션으로 빛난다
+    // (4단계 플레임 3색 / 5단계는 오로라가 테두리를 따라 흐르는 애니메이션)
     if (level < 2) return card;
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(21.5),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: ringColors,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: ringColors.last
-                .withValues(alpha: level >= 3 ? 0.32 : 0.18),
-            blurRadius: level >= 3 ? 16 : 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(1.6),
-      child: card,
-    );
+    return _LevelCardFrame(level: level, child: card);
   }
 
   void _showManageSheet(BuildContext context) {

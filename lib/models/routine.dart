@@ -194,10 +194,14 @@ class Routine {
     return due.isAfter(endDate) ? endDate : due;
   }
 
-  /// 그 날짜 시점의 도장 레벨 (1~3) — 시작일부터 시간이 지나며 바브바브가 성장한다.
-  /// 첫 1주일(0~6일차) = 1단계, 그 뒤 2주(7~20일차) = 2단계, 3주 이후(21일차~) = 3단계.
+  /// 그 날짜 시점의 도장 레벨 (1~5) — 시작일부터 시간이 지나며 바브바브가 성장한다.
+  /// 승급까지 걸리는 시간이 한 주씩 길어진다:
+  /// 1→2는 1주(7일차), 2→3은 2주 더(21일차), 3→4는 3주 더(42일차),
+  /// 4→5는 4주 더(70일차). 10주를 채우면 최종 진화 — 코스믹 마스터.
   int stampLevelOn(DateTime date) {
     final days = _dateOnly(date).difference(startDate).inDays;
+    if (days >= 70) return 5;
+    if (days >= 42) return 4;
     if (days >= 21) return 3;
     if (days >= 7) return 2;
     return 1;

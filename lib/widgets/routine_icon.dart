@@ -19,8 +19,14 @@ class RoutineIconTile extends StatelessWidget {
   final Routine routine;
   final double size;
   final int level; // 도장 레벨 — 2단계부터는 기본 아이콘도 성장한 바브바브로
-  const RoutineIconTile(
-      {super.key, required this.routine, this.size = 52, this.level = 1});
+  final int variant; // 4·5단계 얼굴 변형 (0~3)
+  const RoutineIconTile({
+    super.key,
+    required this.routine,
+    this.size = 52,
+    this.level = 1,
+    this.variant = 0,
+  });
 
   IconData get _methodIcon => switch (routine.verifyMethod) {
         VerifyMethod.photo => Icons.photo_camera_outlined,
@@ -60,7 +66,9 @@ class RoutineIconTile extends StatelessWidget {
                 ? CertPhoto(path: iconPath, fit: BoxFit.cover)
                 : level >= 2
                     // 성장한 바브바브가 기본 아이콘이 된다
-                    ? Center(child: VaveFace(size: size * 0.92, level: level))
+                    ? Center(
+                        child: VaveFace(
+                            size: size * 0.92, level: level, variant: variant))
                     : Icon(_methodIcon, color: cs.primary, size: size * 0.46),
           ),
           // 꾸밀 수 있다는 힌트 배지 (사진 아이콘)

@@ -28,19 +28,61 @@ class AppTheme {
   /// 캐릭터 얼굴 에셋 경로 — 도장·로고·아이콘이 모두 이 하나를 쓴다
   static const faceAsset = 'assets/character/vave_face.png';
 
-  /// 도장 레벨(1~3)별 얼굴 — 도장을 모을수록 바브바브가 성장한다.
-  /// 1단계: 후드 바브 / 2단계: 탐구 바브 / 3단계: 마스터 바브
-  static String faceAssetFor(int level) => switch (level) {
-        >= 3 => 'assets/character/vave_face3.png',
+  /// 4·5단계 얼굴 변형 4장씩 — 날마다 다른 모습의 바브바브가 나타난다.
+  static const _face4Variants = [
+    'assets/character/vave_face4.png',
+    'assets/character/vave_face4b.png',
+    'assets/character/vave_face4c.png',
+    'assets/character/vave_face4d.png',
+  ];
+  static const _face5Variants = [
+    'assets/character/vave_face5.png',
+    'assets/character/vave_face5b.png',
+    'assets/character/vave_face5c.png',
+    'assets/character/vave_face5d.png',
+  ];
+
+  /// 도장 레벨(1~5)별 얼굴 — 도장을 모을수록 바브바브가 성장한다.
+  /// 1 후드 / 2 탐구 / 3 마스터 / 4 초사이언(골드) / 5 코스믹 마스터(우주).
+  /// 4·5단계는 원화가 4장씩 있어 [variant]로 골라 쓴다 (기본 0).
+  static String faceAssetFor(int level, {int variant = 0}) => switch (level) {
+        >= 5 => _face5Variants[variant % 4],
+        4 => _face4Variants[variant % 4],
+        3 => 'assets/character/vave_face3.png',
         2 => 'assets/character/vave_face2.png',
         _ => faceAsset,
       };
 
-  /// 레벨별 도장 링 색 (1: 바이올렛 / 2: 네온 블루 / 3: 골드)
+  /// 오늘의 얼굴 변형 번호 — 4·5단계 바브바브는 날마다 포즈가 바뀐다.
+  static int dailyVariant([DateTime? when]) {
+    final d = when ?? DateTime.now();
+    return d.difference(DateTime(d.year)).inDays % 4;
+  }
+
+  /// 레벨별 도장 링 색
+  /// (1 바이올렛 / 2 바이올렛→블루 / 3 골드 / 4 초사이언 플레임 / 5 코스믹 오로라)
   static List<Color> stampRingColors(int level) => switch (level) {
-        >= 3 => const [Color(0xFFFFC24D), Color(0xFFFF8A3D)],
+        >= 5 => const [Color(0xFF9E7BFF), Color(0xFF3FA9FF), Color(0xFF7CF7FF)],
+        4 => const [Color(0xFFFFF2A6), Color(0xFFFFC24D), Color(0xFFFF7A1A)],
+        3 => const [Color(0xFFFFC24D), Color(0xFFFF8A3D)],
         2 => const [Color(0xFF7C5CFF), Color(0xFF37B4FF)],
         _ => const [stamp, stamp],
+      };
+
+  /// 레벨 배지 라벨 (2단계부터 카드에 표시)
+  static String levelBadge(int level) => switch (level) {
+        >= 5 => '🌌 5단계',
+        4 => '🔥 4단계',
+        3 => '👑 3단계',
+        _ => '⭐ 2단계',
+      };
+
+  /// 레벨별 글로우 강도 — 올라갈수록 더 화려하게 빛난다
+  static double glowAlpha(int level) => switch (level) {
+        >= 5 => 0.60,
+        4 => 0.50,
+        3 => 0.45,
+        _ => 0.22,
       };
 
   /// 캐릭터 전신 에셋 — 스플래시 인트로용
@@ -192,14 +234,25 @@ class AppTheme {
 class VaveFace extends StatelessWidget {
   final double size;
   final double zoom;
-  final int level; // 도장 레벨 (1~3) — 모을수록 바브바브가 성장
-  const VaveFace(
-      {super.key, required this.size, this.zoom = 1.3, this.level = 1});
+  final int level; // 도장 레벨 (1~5) — 모을수록 바브바브가 성장
+  final int variant; // 4·5단계 원화 변형 (0~3)
+  const VaveFace({
+    super.key,
+    required this.size,
+    this.zoom = 1.3,
+    this.level = 1,
+    this.variant = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // 2·3단계 원화는 얼굴 여백이 달라 살짝만 당긴다
-    final z = level >= 2 ? (zoom * 0.85).clamp(1.0, 3.0) : zoom;
+    // 2·3단계 원화는 얼굴 여백이 달라 살짝만 당기고,
+    // 4·5단계 컷아웃은 이미 얼굴이 꽉 차 있어 거의 당기지 않는다
+    final z = level >= 4
+        ? 1.04
+        : level >= 2
+            ? (zoom * 0.85).clamp(1.0, 3.0)
+            : zoom;
     return SizedBox(
       width: size,
       height: size,
@@ -208,7 +261,7 @@ class VaveFace extends StatelessWidget {
           scale: z,
           alignment: const Alignment(0, -0.12), // 눈이 가운데 오도록 살짝 위로
           child: Image.asset(
-            AppTheme.faceAssetFor(level),
+            AppTheme.faceAssetFor(level, variant: variant),
             fit: BoxFit.cover,
             filterQuality: FilterQuality.medium,
             errorBuilder: (_, __, ___) => const SizedBox.shrink(),
@@ -225,13 +278,15 @@ class StampMark extends StatelessWidget {
   final double size;
   final String label; // (호환용) 얼굴 도장에서는 표시하지 않는다
   final bool filledCheck;
-  final int level; // 도장 레벨 (1~3) — 링 색과 얼굴이 함께 진화
+  final int level; // 도장 레벨 (1~5) — 링 색과 얼굴이 함께 진화
+  final int variant; // 4·5단계 얼굴 변형 (0~3)
   const StampMark({
     super.key,
     this.size = 48,
     this.label = 'UP!',
     this.filledCheck = false,
     this.level = 1,
+    this.variant = 0,
   });
 
   @override
@@ -253,10 +308,17 @@ class StampMark extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: colors.last.withValues(alpha: level >= 3 ? 0.45 : 0.22),
+              color: colors.last.withValues(alpha: AppTheme.glowAlpha(level)),
               blurRadius: size * (level >= 3 ? 0.30 : 0.18),
               offset: Offset(0, size * 0.05),
             ),
+            // 5단계: 반대편에서 바이올렛 빛이 한 번 더 — 오로라처럼 이중 발광
+            if (level >= 5)
+              BoxShadow(
+                color: colors.first.withValues(alpha: 0.45),
+                blurRadius: size * 0.34,
+                offset: Offset(0, -size * 0.04),
+              ),
           ],
         ),
         child: Container(
@@ -266,7 +328,7 @@ class StampMark extends StatelessWidget {
           ),
           clipBehavior: Clip.antiAlias,
           alignment: Alignment.center,
-          child: VaveFace(size: size, level: level),
+          child: VaveFace(size: size, level: level, variant: variant),
         ),
       ),
     );
@@ -309,14 +371,20 @@ class StampButton extends StatelessWidget {
   final bool certified;
   final double size;
   final int level;
-  const StampButton(
-      {super.key, required this.certified, this.size = 52, this.level = 1});
+  final int variant; // 4·5단계 얼굴 변형 (0~3)
+  const StampButton({
+    super.key,
+    required this.certified,
+    this.size = 52,
+    this.level = 1,
+    this.variant = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     if (certified) {
-      return StampMark(size: size, level: level);
+      return StampMark(size: size, level: level, variant: variant);
     }
     return Container(
       width: size,

@@ -182,12 +182,24 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  /// 오늘 기준 도장 레벨 (1~3) — 루틴 시작일부터 흐른 시간으로 진화한다.
-  /// 첫 1주일 = 1단계, 그 뒤 2주 = 2단계, 3주 이후 = 3단계. (Routine.stampLevelOn)
+  /// 오늘 기준 도장 레벨 (1~5) — 루틴 시작일부터 흐른 시간으로 진화한다.
+  /// 1주 → 2단계, 3주 → 3단계, 6주 → 4단계, 10주 → 5단계. (Routine.stampLevelOn)
   int levelFor(String routineId) {
     final idx = routines.indexWhere((r) => r.id == routineId);
     if (idx < 0) return 1;
     return routines[idx].stampLevelOn(DateTime.now());
+  }
+
+  /// 진행 중 루틴들의 최고 도장 레벨 — 4단계부터 홈 배경(오라)이 함께 화려해진다.
+  int maxStampLevel() {
+    final now = DateTime.now();
+    var maxLv = 1;
+    for (final r in routines) {
+      if (r.isEnded(now)) continue;
+      final l = r.stampLevelOn(now);
+      if (l > maxLv) maxLv = l;
+    }
+    return maxLv;
   }
 
   /// 루틴 아이콘 사진 변경 (null = 기본 아이콘으로 되돌리기)

@@ -341,13 +341,15 @@ class _DayCell extends StatelessWidget {
           alignment: Alignment.center,
           child: certified
               // 인증한 날 = 그 날짜 시점 레벨의 바브바브 도장 —
-              // 달력에 1→2→3단계로 성장해 온 과정이 그대로 남는다
+              // 달력에 1→5단계로 성장해 온 과정이 그대로 남는다.
+              // 4·5단계는 날짜마다 다른 포즈가 찍혀 달력이 더 화려해진다.
               ? LayoutBuilder(
                   builder: (_, c) => Transform.rotate(
                     angle: -0.12,
                     child: VaveFace(
                         size: c.maxWidth * 0.82,
-                        level: routine.stampLevelOn(day)),
+                        level: routine.stampLevelOn(day),
+                        variant: day.day % 4),
                   ),
                 )
               : Text(

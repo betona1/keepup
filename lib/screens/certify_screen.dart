@@ -373,7 +373,8 @@ class _CertifyScreenState extends State<CertifyScreen> {
                   StampMark(
                       size: 40,
                       filledCheck: true,
-                      level: widget.state.levelFor(widget.routine.id)),
+                      level: widget.state.levelFor(widget.routine.id),
+                      variant: AppTheme.dailyVariant()),
                   const SizedBox(width: 10),
                   const Text('도장 찍었습니다!',
                       style: TextStyle(

@@ -76,11 +76,9 @@ flutter:
   assets:
     - assets/quotes.json
     # 바브바브(VAVEVAVE) 캐릭터 — 도장·로고·스플래시에 공통 사용
-    # (원본 etc/바브바브01.png → `dart run tool/gen_character_assets.dart`로 생성)
-    - assets/character/vave_face.png
-    - assets/character/vave_face2.png
-    - assets/character/vave_face3.png
-    - assets/character/vave_full.png
+    # (원본 etc/바브바브*.png → `dart run tool/gen_character_assets.dart`로 생성)
+    # 레벨 1~5 얼굴 + 4·5단계 변형(b/c/d) + 전신 — 폴더째 번들
+    - assets/character/
 
   # 네이버 나눔고딕 (OFL 라이선스, 오프라인 번들)
   fonts:

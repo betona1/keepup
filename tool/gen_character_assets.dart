@@ -191,13 +191,26 @@ void _writeIcons(img.Image src) {
   _write('assets/icon/icon_bg.png', background());
 }
 
-/// 레벨별 얼굴 — 도장 진화(2·3단계)용. 바브바브02(탐구)·03(마스터)에서 오려낸다.
-/// 이 두 원본은 인포그래픽이라 얼굴 주변에 글자·콜아웃이 있어, 얼굴 반경을
+/// 레벨별 얼굴 — 도장 진화(2~5단계)용.
+/// 2·3단계는 바브바브02(탐구)·03(마스터), 4단계는 초사이언 바브 4종,
+/// 5단계는 코스믹 마스터 바브 4종에서 오려낸다.
+/// 원본들이 인포그래픽이라 얼굴 주변에 글자·콜아웃이 있어, 얼굴 반경을
 /// 보수적으로 잡고 어두운 배경만 지우는 일반 규칙을 쓴다.
+/// 4·5단계는 변형 4장씩(vave_face4~4d, 5~5d) — 앱에서 날마다 얼굴이 바뀐다.
 void _writeLevelFaces() {
   final configs = [
     ('etc/바브바브02.png', 645.0, 545.0, 300.0, 'assets/character/vave_face2.png'),
     ('etc/바브바브03.png', 665.0, 420.0, 295.0, 'assets/character/vave_face3.png'),
+    // ── 4단계 초사이언 바브 (골드) ──
+    ('etc/바브바브4단계1.png', 665.0, 460.0, 230.0, 'assets/character/vave_face4.png'),
+    ('etc/바브바브4단계2.png', 640.0, 450.0, 225.0, 'assets/character/vave_face4b.png'),
+    ('etc/바브바브4단계3.png', 668.0, 469.0, 220.0, 'assets/character/vave_face4c.png'),
+    ('etc/바브바브4단계4.png', 660.0, 470.0, 220.0, 'assets/character/vave_face4d.png'),
+    // ── 5단계 코스믹 마스터 바브 (우주) ──
+    ('etc/바브바브5단계-03.png', 470.0, 660.0, 245.0, 'assets/character/vave_face5.png'),
+    ('etc/바브바브5단계-01.png', 430.0, 640.0, 230.0, 'assets/character/vave_face5b.png'),
+    ('etc/바브바브5단계-02.png', 455.0, 620.0, 230.0, 'assets/character/vave_face5c.png'),
+    ('etc/바브바브5단계-04.png', 445.0, 650.0, 220.0, 'assets/character/vave_face5d.png'),
   ];
   for (final (srcPath, cx, cy, r, outPath) in configs) {
     final f = File(srcPath);
