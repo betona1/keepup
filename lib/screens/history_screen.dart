@@ -661,7 +661,12 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                     Text(cert.memo),
                   ],
                   const SizedBox(height: 12),
-                  Row(
+                  // 버튼이 좁은 화면에서 넘치면 자동으로 줄바꿈된다
+                  OverflowBar(
+                    alignment: MainAxisAlignment.spaceBetween,
+                    spacing: 4,
+                    overflowSpacing: 4,
+                    overflowAlignment: OverflowBarAlignment.end,
                     children: [
                       // 잘못 찍은 도장·날짜 정정용 삭제 (state가 있을 때만)
                       if (widget.state != null)
@@ -692,10 +697,51 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                           },
                           icon: Icon(Icons.delete_outline,
                               size: 18, color: cs.error),
-                          label: Text('인증 삭제',
+                          label: Text('삭제',
                               style: TextStyle(color: cs.error)),
                         ),
-                      const Spacer(),
+                      // 다시 인증 — 사진·소감을 바꾸고 싶을 때 (도장 날짜 유지)
+                      if (widget.state != null && routine != null)
+                        TextButton.icon(
+                          onPressed: () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: const Text('다시 인증할까요?'),
+                                content: const Text(
+                                    '지금 기록을 지우고 처음부터 새로 인증합니다.\n'
+                                    '(같은 날짜의 도장으로 다시 찍혀요)'),
+                                actions: [
+                                  TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('취소')),
+                                  FilledButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text('다시 인증')),
+                                ],
+                              ),
+                            );
+                            if (ok != true || !context.mounted) return;
+                            await widget.state!
+                                .deleteCertification(cert.id);
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CertifyScreen(
+                                  state: widget.state!,
+                                  routine: routine,
+                                  day: DateTime.parse(cert.dateKey),
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          label: const Text('다시 인증'),
+                        ),
                       FilledButton.tonalIcon(
                         onPressed: () => ShareService.shareCertification(
                             cert: cert, routine: routine),

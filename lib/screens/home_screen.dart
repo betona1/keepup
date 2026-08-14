@@ -878,8 +878,19 @@ class _RoutineCard extends StatelessWidget {
     final card = Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        // 인증 완료 카드도 탭할 수 있다 — 저장된 인증을 열어
+        // 공유(놓쳤어도 다시!)·다시 인증·삭제가 가능하다.
         onTap: locked
-            ? null
+            ? () {
+                final todayCerts = state
+                    .certsForRoutine(routine.id)
+                    .where((c) => c.dateKey == dateKeyOf(effDay))
+                    .toList()
+                  ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+                if (todayCerts.isEmpty) return;
+                showCertDetail(context, todayCerts.first, routine,
+                    state: state);
+              }
             : () => Navigator.push(
                   context,
                   MaterialPageRoute(
