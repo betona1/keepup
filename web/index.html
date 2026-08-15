@@ -44,28 +44,47 @@
                    "Malgun Gothic", sans-serif;
       color: #274ED5;
     }
+    /* 앱 도장과 같은 모습 — 바이올렛 링 안에 바브바브 얼굴, 살짝 기운 채로 */
     #boot .mark {
-      width: 72px;
-      height: 72px;
-      border-radius: 20px;
-      border: 3px solid #B32A19;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 26px;
-      color: #B32A19;
-      transform: rotate(-6deg);
+      width: 78px;
+      height: 78px;
+      box-sizing: border-box;
+      border-radius: 50%;
+      padding: 5px;
+      background: linear-gradient(135deg, #7C5CFF, #A88BFF);
+      box-shadow: 0 6px 20px rgba(124, 92, 255, 0.35);
+      transform: rotate(-8deg);
+    }
+    #boot .mark .face {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #EDE7FF;
+    }
+    #boot .mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      /* 얼굴이 링을 꽉 채우도록 살짝 당긴다 (앱의 VaveFace zoom과 동일한 느낌) */
+      transform: scale(1.3);
+      transform-origin: 50% 42%;
     }
     #boot .label { font-size: 13px; opacity: 0.75; }
     @media (prefers-color-scheme: dark) {
       #boot { color: #A9C0FF; }
+      #boot .mark .face { background: #251F45; }
     }
   </style>
 </head>
 <body>
   <div id="boot">
-    <div class="mark">인증</div>
+    <div class="mark">
+      <div class="face">
+        <img src="assets/assets/character/vave_face.png" alt="바브바브 도장"
+             onerror="this.style.display='none'">
+      </div>
+    </div>
     <div class="label">로그챌린지 불러오는 중…</div>
   </div>
 
