@@ -17,6 +17,7 @@ import 'screens/certify_screen.dart';
 import 'services/backup_service.dart';
 import 'services/cloud_sync_service.dart';
 import 'services/auto_upload_service.dart';
+import 'services/web_auto_sync.dart';
 import 'widgets/cloud_sync_sheet.dart';
 import 'widgets/login_sheet.dart';
 import 'screens/history_screen.dart';
@@ -165,6 +166,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     TimerService.instance.checkCompletion();
     // 다른 기기가 '기록 보내달라'고 요청해 뒀는지 확인 (로그인 상태에서만 의미)
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkPullRequest());
+    // 웹: 폰이 자동으로 올려 둔 더 새로운 백업이 있으면 안내/자동 반영
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkWebCloudSync());
     // 자동 스냅샷으로 데이터를 되살렸으면 사용자에게 알린다
     if (widget.state.restoredFromAutosave) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -201,6 +204,80 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
       _checkPullRequest();
       // 못 올린 클라우드 자동 백업이 있으면 재시도 (오프라인이었다가 복귀 등)
       AutoUploadService.instance.flushIfDirty();
+      // 웹: 탭으로 돌아왔을 때도 새 백업이 있는지 확인
+      _checkWebCloudSync();
+    }
+  }
+
+  // 웹 자동 가져오기 — 중복 안내·과잉 조회 방지
+  bool _webSyncBusy = false;
+  DateTime _lastWebSyncCheck = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// 웹(PWA) 전용 — 폰이 자동으로 올려 둔 백업이 이 브라우저보다 새로우면:
+  /// 브라우저 기록이 비어 있을 땐 조용히 가져오고, 있을 땐 확인을 받는다.
+  Future<void> _checkWebCloudSync() async {
+    if (!kIsWeb || _webSyncBusy) return;
+    final now = DateTime.now();
+    if (now.difference(_lastWebSyncCheck) < const Duration(seconds: 30)) return;
+    _lastWebSyncCheck = now;
+
+    _webSyncBusy = true;
+    try {
+      final info = await WebAutoSync.newerBackup(); // 미로그인·최신이면 null
+      final at = info?.updatedAt;
+      if (info == null || at == null || !mounted) return;
+      final timeLabel = DateFormat('M월 d일 HH:mm').format(at);
+
+      final isEmpty =
+          widget.state.routines.isEmpty && widget.state.certs.isEmpty;
+      if (isEmpty) {
+        // 이 브라우저엔 기록이 없다 — 잃을 게 없으니 조용히 가져온다
+        final (routines, certs) = await CloudSyncService.download();
+        await widget.state.restoreAll(routines, certs, autoUpload: false);
+        await WebAutoSync.recordSynced(at);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('클라우드의 기록을 자동으로 가져왔어요 ($timeLabel 백업) ✅'),
+              duration: const Duration(seconds: 5)));
+        }
+        return;
+      }
+
+      // 브라우저에 기록이 있다 — 덮어쓰기 전에 반드시 확인
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('🌐 폰의 최신 기록이 있어요'),
+          content: Text(
+              '클라우드에 더 새로운 백업이 있어요 ($timeLabel).\n\n'
+              '가져오면 이 브라우저의 기록이 백업 내용으로 교체됩니다. '
+              '이 브라우저에서만 인증한 기록이 있다면 사라져요.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('나중에')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('가져와서 교체')),
+          ],
+        ),
+      );
+      if (ok == true && mounted) {
+        final (routines, certs) = await CloudSyncService.download();
+        await widget.state.restoreAll(routines, certs, autoUpload: false);
+        await WebAutoSync.recordSynced(at);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('가져왔어요 — 루틴 ${routines.length}개, '
+                  '인증 ${certs.length}개 🎉')));
+        }
+      } else if (ok == false) {
+        await WebAutoSync.decline(at); // 이 버전은 다시 묻지 않는다
+      }
+    } catch (_) {
+      // 오프라인 등 — 조용히 넘어가고 다음 기회에 다시 확인
+    } finally {
+      _webSyncBusy = false;
     }
   }
 

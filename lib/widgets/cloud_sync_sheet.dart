@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../app_state.dart';
 import '../services/auto_upload_service.dart';
 import '../services/cloud_sync_service.dart';
+import '../services/web_auto_sync.dart';
 
 /// 클라우드 백업 시트 — 계정에 기록을 올리고 내린다.
 ///
@@ -88,6 +89,7 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
       _say('올렸어요 — 루틴 ${routines.length}개, 인증 ${certs.length}개 '
           '(${(bytes / 1024 / 1024).toStringAsFixed(1)}MB)');
       await _load();
+      await WebAutoSync.recordSynced(_info?.updatedAt); // 웹: 지금이 동기화 기준점
     } catch (e) {
       _say('$e'.replaceFirst('Bad state: ', ''), error: true);
     } finally {
@@ -123,6 +125,8 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
       final (routines, certs) = await CloudSyncService.download();
       await widget.state.restoreAll(routines, certs, autoUpload: false);
       AutoUploadService.instance.markClean(); // 로컬 = 클라우드 상태
+      await _load(); // 최신 백업 시각으로 갱신
+      await WebAutoSync.recordSynced(_info?.updatedAt); // 웹: 지금이 동기화 기준점
       _say('복원 완료 — 루틴 ${routines.length}개, 인증 ${certs.length}개 🎉');
     } catch (e) {
       _say('$e'.replaceFirst('Bad state: ', ''), error: true);
@@ -191,6 +195,7 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
         await CloudSyncService.clearPull();
         _say('가져왔어요 — 루틴 ${routines.length}개, 인증 ${certs.length}개 🎉');
         await _load();
+        await WebAutoSync.recordSynced(_info?.updatedAt); // 웹: 지금이 동기화 기준점
       } catch (e) {
         _say('$e'.replaceFirst('Bad state: ', ''), error: true);
       } finally {
