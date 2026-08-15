@@ -16,6 +16,7 @@ import 'screens/home_screen.dart';
 import 'screens/certify_screen.dart';
 import 'services/backup_service.dart';
 import 'services/cloud_sync_service.dart';
+import 'services/auto_upload_service.dart';
 import 'widgets/cloud_sync_sheet.dart';
 import 'widgets/login_sheet.dart';
 import 'screens/history_screen.dart';
@@ -46,6 +47,12 @@ Future<void> main() async {
   final storage = await StorageService.create();
   final state = AppState(storage);
   await state.load();
+
+  // 클라우드 자동 올리기 — 기록이 바뀌면 (로그인 시) 백업을 자동 갱신한다.
+  // 디바운스 뒤에 올리므로 업로드 시점의 최신 데이터를 읽도록 함수로 연결.
+  AutoUploadService.instance.provider = () => (state.routines, state.certs);
+  await AutoUploadService.instance.init();
+  AutoUploadService.instance.flushIfDirty(); // 지난번에 못 올린 게 있으면 재시도
 
   // 진행 중이던 타이머 세션 복원 (앱을 껐다 켜도 달리기·명상 시간이 이어짐)
   await TimerService.instance.load();
@@ -192,6 +199,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
       TimerService.instance.checkCompletion();
       // 다른 기기의 '가져오기 요청'도 이때 확인 (푸시 없이 열 때마다 폴링)
       _checkPullRequest();
+      // 못 올린 클라우드 자동 백업이 있으면 재시도 (오프라인이었다가 복귀 등)
+      AutoUploadService.instance.flushIfDirty();
     }
   }
 
@@ -236,6 +245,7 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
       if (send == true && mounted) {
         try {
           await CloudSyncService.upload(routines, certs);
+          AutoUploadService.instance.markClean(); // 방금 올렸으니 자동 올리기 대기 해제
           await CloudSyncService.clearPull();
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

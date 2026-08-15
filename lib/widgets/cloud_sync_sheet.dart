@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../app_state.dart';
+import '../services/auto_upload_service.dart';
 import '../services/cloud_sync_service.dart';
 
 /// 클라우드 백업 시트 — 계정에 기록을 올리고 내린다.
@@ -33,10 +34,18 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
   int _waitedSec = 0;
   static const _waitLimitSec = 5 * 60;
 
+  // 자동 올리기 설정 (폰 전용 — 웹은 폰 백업을 덮으면 안 되므로 없음)
+  bool _autoOn = true;
+
   @override
   void initState() {
     super.initState();
     _load();
+    if (!kIsWeb) {
+      AutoUploadService.instance.enabled().then((v) {
+        if (mounted) setState(() => _autoOn = v);
+      });
+    }
   }
 
   @override
@@ -75,6 +84,7 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
     });
     try {
       final bytes = await CloudSyncService.upload(routines, certs);
+      AutoUploadService.instance.markClean(); // 방금 올렸으니 자동 올리기 대기 해제
       _say('올렸어요 — 루틴 ${routines.length}개, 인증 ${certs.length}개 '
           '(${(bytes / 1024 / 1024).toStringAsFixed(1)}MB)');
       await _load();
@@ -111,7 +121,8 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
     });
     try {
       final (routines, certs) = await CloudSyncService.download();
-      await widget.state.restoreAll(routines, certs);
+      await widget.state.restoreAll(routines, certs, autoUpload: false);
+      AutoUploadService.instance.markClean(); // 로컬 = 클라우드 상태
       _say('복원 완료 — 루틴 ${routines.length}개, 인증 ${certs.length}개 🎉');
     } catch (e) {
       _say('$e'.replaceFirst('Bad state: ', ''), error: true);
@@ -175,7 +186,8 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
       setState(() => _busy = true);
       try {
         final (routines, certs) = await CloudSyncService.download();
-        await widget.state.restoreAll(routines, certs);
+        await widget.state.restoreAll(routines, certs, autoUpload: false);
+        AutoUploadService.instance.markClean(); // 로컬 = 클라우드 상태
         await CloudSyncService.clearPull();
         _say('가져왔어요 — 루틴 ${routines.length}개, 인증 ${certs.length}개 🎉');
         await _load();
@@ -321,6 +333,46 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                       ],
                     ),
             ),
+
+            // 자동 올리기 토글 — 폰 전용. 웹에서 켜면 브라우저의 옛 기록이
+            // 폰 백업을 덮을 수 있어 웹에는 아예 노출하지 않는다.
+            if (!kIsWeb) ...[
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: SwitchListTile(
+                  value: _autoOn,
+                  onChanged: (v) {
+                    setState(() => _autoOn = v);
+                    AutoUploadService.instance.setEnabled(v);
+                  },
+                  dense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  title: const Text('도장 찍으면 자동으로 올리기',
+                      style: TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w700)),
+                  subtitle: ValueListenableBuilder<DateTime?>(
+                    valueListenable: AutoUploadService.instance.lastUploadedAt,
+                    builder: (_, at, __) => Text(
+                      _autoOn
+                          ? '기록이 바뀌면 몇 초 뒤 백업을 자동 갱신해요 (로그인 상태일 때만)'
+                              '${at != null ? '\n마지막 자동 올리기: ${DateFormat('M월 d일 HH:mm').format(at)}' : ''}'
+                          : '꺼짐 — [지금 기록 올리기]로 직접 올려야 해요',
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          height: 1.35,
+                          color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                ),
+              ),
+            ],
 
             // 클라우드가 비어 있는데 내려받기만 눌러보는 경우가 많다.
             // "다른 기기 기록을 가져오려면 그 기기에서 먼저 올려야 한다"를 여기서 알려준다.

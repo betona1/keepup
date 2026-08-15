@@ -5,6 +5,7 @@ import 'models/notif_settings.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 import 'services/autosave_service.dart';
+import 'services/auto_upload_service.dart';
 
 /// 앱 전역 상태. 저장소와 알림 예약을 함께 관리한다.
 class AppState extends ChangeNotifier {
@@ -40,12 +41,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _persistAndSync() async {
+  Future<void> _persistAndSync({bool autoUpload = true}) async {
     await _storage.saveRoutines(routines);
     await _storage.saveCerts(certs);
     await AutosaveService.instance.save(routines, certs); // 자동 스냅샷
     await _syncNotifications();
     notifyListeners();
+    // 로그인돼 있으면 클라우드 백업도 잠시 뒤 자동 갱신 (폰 → 클라우드 단방향)
+    if (autoUpload) AutoUploadService.instance.schedule();
   }
 
   Future<void> _syncNotifications() async {
@@ -238,12 +241,15 @@ class AppState extends ChangeNotifier {
     await _persistAndSync();
   }
 
-  /// 백업 복원 — 현재 데이터를 백업 내용으로 전부 교체
+  /// 백업 복원 — 현재 데이터를 백업 내용으로 전부 교체.
+  /// 클라우드에서 내려받아 복원할 때는 [autoUpload]를 꺼서
+  /// 방금 받은 내용을 그대로 되올리는 낭비를 막는다.
   Future<void> restoreAll(
-      List<Routine> newRoutines, List<Certification> newCerts) async {
+      List<Routine> newRoutines, List<Certification> newCerts,
+      {bool autoUpload = true}) async {
     routines = newRoutines;
     certs = newCerts;
-    await _persistAndSync();
+    await _persistAndSync(autoUpload: autoUpload);
   }
 
   // ---- 인증 ----
