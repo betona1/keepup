@@ -596,6 +596,7 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                             'steps' =>
                               '👟 걸음수 인증${cert.steps != null ? ' · ${cert.steps}보 확인' : ''}',
                             'link' => '🔗 URL 인증',
+                            'assignment' => '📝 동호회 과제 제출 (내용은 동호회 현황판에서)',
                             _ => '📷 사진 인증 (날짜 워터마크)',
                           },
                           style:
@@ -700,8 +701,11 @@ class _CertDetailDialogState extends State<_CertDetailDialog> {
                           label: Text('삭제',
                               style: TextStyle(color: cs.error)),
                         ),
-                      // 다시 인증 — 사진·소감을 바꾸고 싶을 때 (도장 날짜 유지)
-                      if (widget.state != null && routine != null)
+                      // 다시 인증 — 사진·소감을 바꾸고 싶을 때 (도장 날짜 유지).
+                      // 동호회 과제 점검형은 홈 카드의 제출 화면에서 다시 낸다.
+                      if (widget.state != null &&
+                          routine != null &&
+                          !routine.crewAssignment)
                         TextButton.icon(
                           onPressed: () async {
                             final ok = await showDialog<bool>(
@@ -795,6 +799,8 @@ class _CertTile extends StatelessWidget {
                                           ? Icons.link_rounded
                                           : cert.verifyMethod == 'steps'
                                           ? Icons.directions_walk_rounded
+                                          : cert.verifyMethod == 'assignment'
+                                          ? Icons.assignment_turned_in_outlined
                                           : Icons.image_not_supported,
                           size: 36,
                           color: cs.onSurfaceVariant,

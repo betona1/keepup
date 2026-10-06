@@ -6,6 +6,8 @@ import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 import 'services/autosave_service.dart';
 import 'services/auto_upload_service.dart';
+import 'services/crew_sync_service.dart';
+import 'models/crew.dart';
 
 /// 앱 전역 상태. 저장소와 알림 예약을 함께 관리한다.
 class AppState extends ChangeNotifier {
@@ -75,6 +77,8 @@ class AppState extends ChangeNotifier {
   /// 잘못 찍은 도장은 인증 삭제로 먼저 정리해야 한다. 성공 시 true.
   Future<bool> deleteRoutine(String routineId) async {
     if (certs.any((c) => c.routineId == routineId)) return false;
+    // 동호회 과제는 동호회가 관리한다 — 동호회에서 나가거나 과제가 끝나면 자동으로 정리된다
+    if (routineById(routineId)?.isCrew ?? false) return false;
     routines = routines.where((r) => r.id != routineId).toList();
     await _persistAndSync();
     return true;
@@ -98,6 +102,7 @@ class AppState extends ChangeNotifier {
     final idx = routines.indexWhere((r) => r.id == routineId);
     if (idx < 0) return false;
     final r = routines[idx];
+    if (r.isCrew) return false; // 동호회 과제 내용은 반장·부반장만 바꾼다
     if (r.changeUsedCount >= maxRoutineChanges) return false; // 찬스 소진
 
     final entry = RoutineChange(
@@ -122,6 +127,8 @@ class AppState extends ChangeNotifier {
       timerMinutes: newTimerMinutes ?? r.timerMinutes,
       targetSteps: r.targetSteps,
       dueWeekday: r.dueWeekday,
+      dueWeekdays: r.dueWeekdays,
+      deadlineMin: r.deadlineMin,
       mediaSource: r.mediaSource,
       requireNote: r.requireNote,
       windowStartMin: r.windowStartMin,
@@ -131,6 +138,10 @@ class AppState extends ChangeNotifier {
       changeUsedCount: r.changeUsedCount + 1,
       changeLog: [...r.changeLog, entry],
       iconPath: r.iconPath,
+      crewId: r.crewId,
+      crewTaskId: r.crewTaskId,
+      crewName: r.crewName,
+      crewAssignment: r.crewAssignment,
     );
     routines = [...routines];
     await _persistAndSync();
@@ -142,6 +153,7 @@ class AppState extends ChangeNotifier {
     final idx = routines.indexWhere((r) => r.id == routineId);
     if (idx < 0) return false;
     final r = routines[idx];
+    if (r.isCrew) return false; // 동호회 과제 기간은 동호회가 정한다
     final minEnd = r.startDate.add(const Duration(days: 29));
     if (newEnd.isBefore(minEnd)) return false;
 
@@ -158,6 +170,8 @@ class AppState extends ChangeNotifier {
       timerMinutes: r.timerMinutes,
       targetSteps: r.targetSteps,
       dueWeekday: r.dueWeekday,
+      dueWeekdays: r.dueWeekdays,
+      deadlineMin: r.deadlineMin,
       mediaSource: r.mediaSource,
       requireNote: r.requireNote,
       windowStartMin: r.windowStartMin,
@@ -167,6 +181,10 @@ class AppState extends ChangeNotifier {
       changeUsedCount: r.changeUsedCount,
       changeLog: r.changeLog,
       iconPath: r.iconPath,
+      crewId: r.crewId,
+      crewTaskId: r.crewTaskId,
+      crewName: r.crewName,
+      crewAssignment: r.crewAssignment,
     );
     routines = [...routines];
     await _persistAndSync();
@@ -178,6 +196,7 @@ class AppState extends ChangeNotifier {
     final idx = routines.indexWhere((r) => r.id == routineId);
     if (idx < 0) return false;
     final r = routines[idx];
+    if (r.isCrew) return false; // 동호회 과제 기간은 동호회가 정한다
     final ns = DateTime(newStart.year, newStart.month, newStart.day);
     var newEnd = r.endDate;
     final minDays = r.type == RoutineType.accumulate ? 29 : 6;
@@ -197,6 +216,8 @@ class AppState extends ChangeNotifier {
       timerMinutes: r.timerMinutes,
       targetSteps: r.targetSteps,
       dueWeekday: r.dueWeekday,
+      dueWeekdays: r.dueWeekdays,
+      deadlineMin: r.deadlineMin,
       mediaSource: r.mediaSource,
       requireNote: r.requireNote,
       windowStartMin: r.windowStartMin,
@@ -206,6 +227,10 @@ class AppState extends ChangeNotifier {
       changeUsedCount: r.changeUsedCount,
       changeLog: r.changeLog,
       iconPath: r.iconPath,
+      crewId: r.crewId,
+      crewTaskId: r.crewTaskId,
+      crewName: r.crewName,
+      crewAssignment: r.crewAssignment,
     );
     routines = [...routines];
     await _persistAndSync();
@@ -259,10 +284,74 @@ class AppState extends ChangeNotifier {
     await _persistAndSync();
   }
 
-  /// 인증 1건 삭제 (잘못 찍은 도장·날짜 정정용)
+  /// 인증 1건 삭제 (잘못 찍은 도장·날짜 정정용).
+  /// 동호회 과제 인증이면 마감 전인 동호회 제출도 함께 취소한다.
   Future<void> deleteCertification(String certId) async {
+    final cert = certs.where((c) => c.id == certId).firstOrNull;
     certs = certs.where((c) => c.id != certId).toList();
     await _persistAndSync();
+    final r = cert == null ? null : routineById(cert.routineId);
+    if (cert != null && r != null && r.isCrew) {
+      CrewSyncService.instance.withdrawCert(cert, r);
+    }
+  }
+
+  // ---- 동호회 과제 연동 ----
+
+  /// 과제 점검형 제출이 끝난 뒤 개인 도장을 찍는다 — 서버에는 이미 제출했으므로
+  /// 동호회 제출 훅을 다시 타지 않는다. 같은 회차에 다시 냈으면 도장을 교체한다.
+  Future<void> recordCrewAssignmentStamp(Certification c) async {
+    certs = [
+      ...certs.where((x) => !(x.routineId == c.routineId && x.dateKey == c.dateKey)),
+      c,
+    ];
+    await _persistAndSync();
+  }
+
+  /// 서버에서 받은 동호회 과제 목록을 개인 루틴에 반영한다. 반환: 바뀐 루틴 수.
+  /// - 새 과제 → 루틴 추가 / 내용이 바뀐 과제 → 갱신(아이콘 등 개인 설정은 유지)
+  /// - 목록에서 빠진 과제(종료·탈퇴·해체) → 도장이 있으면 개인 루틴으로 남기고,
+  ///   도장이 없으면 정리한다 (기록 보호 원칙과 같게)
+  Future<int> applyCrewTasks(List<CrewTask> tasks) async {
+    var changed = 0;
+    final next = <Routine>[];
+    final byId = {for (final t in tasks) CrewTask.routineIdFor(t.id): t};
+
+    for (final r in routines) {
+      // 동호회를 나갔다가 다시 들어오면 예전 루틴(같은 id)에 다시 연결된다
+      final t = byId.remove(r.id);
+      if (t == null && !r.isCrew) {
+        next.add(r);
+        continue;
+      }
+      if (t != null) {
+        final updated = t.toRoutine(existing: r);
+        // 변경 여부는 생성일을 뺀 내용으로 비교
+        final a = Map.of(updated.toJson())..remove('createdAt');
+        final b = Map.of(r.toJson())..remove('createdAt');
+        if (a.toString() != b.toString()) changed++;
+        next.add(updated);
+      } else if (certs.any((c) => c.routineId == r.id)) {
+        changed++;
+        next.add(Routine.fromJson({
+          ...r.toJson(),
+          'crewId': null,
+          'crewTaskId': null,
+          'crewName': null,
+          'crewAssignment': false,
+        }));
+      } else {
+        changed++; // 도장 없는 동호회 루틴은 그냥 정리
+      }
+    }
+    for (final t in byId.values) {
+      changed++;
+      next.add(t.toRoutine());
+    }
+    if (changed == 0) return 0;
+    routines = next;
+    await _persistAndSync();
+    return changed;
   }
 
   /// 인증 1건의 사진 경로 교체 — 사진 유실 후 갤러리 원본으로 다시 붙이기

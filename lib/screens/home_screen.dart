@@ -9,6 +9,7 @@ import '../services/account_service.dart';
 import '../services/media_store.dart';
 import '../services/quote_service.dart';
 import '../theme.dart';
+import 'crew_assignment_screen.dart';
 import '../widgets/cert_photo.dart';
 import '../widgets/cloud_sync_sheet.dart';
 import '../widgets/marquee_text.dart';
@@ -881,7 +882,19 @@ class _RoutineCard extends StatelessWidget {
       child: InkWell(
         // 인증 완료 카드도 탭할 수 있다 — 저장된 인증을 열어
         // 공유(놓쳤어도 다시!)·다시 인증·삭제가 가능하다.
-        onTap: locked
+        // 과제 점검형 동호회 과제는 동호회 제출 양식으로 (제출·점검 결과·다시 내기)
+        onTap: routine.crewAssignment
+            ? () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AssignmentSubmitScreen(
+                        state: state,
+                        crewId: routine.crewId!,
+                        taskId: routine.crewTaskId!,
+                        routine: routine),
+                  ),
+                )
+            : locked
             ? () {
                 final todayCerts = state
                     .certsForRoutine(routine.id)
@@ -1036,10 +1049,20 @@ class _RoutineCard extends StatelessWidget {
               leading: const Icon(Icons.info_outline),
               title: Text(routine.title),
               subtitle: Text(
-                  '${routine.type.label} · ${routine.dutyCycle.label}'
+                  '${routine.isCrew ? '👥 ${routine.crewName ?? '동호회'} · ' : ''}${routine.type.label} · ${routine.dutyCycle.label}'
                   '${routine.reason.isNotEmpty ? '\n"${routine.reason}"' : ''}'),
             ),
             const Divider(height: 1),
+            // 동호회 과제는 반장·부반장이 관리한다 — 개인 변경·삭제 메뉴 대신 안내
+            if (routine.isCrew)
+              ListTile(
+                leading: const Icon(Icons.groups_rounded, color: AppTheme.stamp),
+                title: Text('동호회 「${routine.crewName ?? ''}」 공통 과제'),
+                subtitle: const Text('내용·기간은 반장·부반장이 관리해요. 도장을 찍으면 동호회에 자동 제출돼요.\n'
+                    '동호회를 나가면 도장이 있는 루틴은 개인 루틴으로 남아요.'),
+                isThreeLine: true,
+              )
+            else ...[
             ListTile(
               leading: const Icon(Icons.swap_horiz_rounded),
               title: const Text('루틴 변경 (다치거나 사정이 생겼을 때)'),
@@ -1149,6 +1172,7 @@ class _RoutineCard extends StatelessWidget {
                 },
               );
             }),
+            ],
           ],
         ),
       ),

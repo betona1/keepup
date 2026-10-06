@@ -21,6 +21,7 @@ import '../services/web_board_service.dart';
 import '../theme.dart';
 import '../widgets/board_share_dialog.dart';
 import '../widgets/login_sheet.dart';
+import '../services/crew_sync_service.dart';
 
 class CertifyScreen extends StatefulWidget {
   // 현재 열려 있는 인증 화면 수 — 타이머 완료 시 중복 이동을 막는 데 쓴다
@@ -347,6 +348,15 @@ class _CertifyScreenState extends State<CertifyScreen> {
           _method == VerifyMethod.link ? _linkCtrl.text.trim() : null,
     );
     await widget.state.addCertification(cert);
+    // 동호회 과제면 같은 내용으로 동호회에도 제출 — 결과(실패 사유 포함)를 반드시 보여 준다
+    if (widget.routine.isCrew) {
+      final msg =
+          await CrewSyncService.instance.submitCert(cert, widget.routine);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), duration: const Duration(seconds: 5)));
+      }
+    }
     // 타이머 인증이 끝났으면 세션을 정리 (다음에 새로 시작)
     if (_method == VerifyMethod.timer && _ts.isActiveFor(widget.routine.id)) {
       await _ts.reset();

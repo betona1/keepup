@@ -144,6 +144,10 @@ class Routine {
   final int timerMinutes; // 타이머 인증 목표(분)
   final int targetSteps; // 걸음수 인증 목표(보)
   final int dueWeekday; // weekly 주기의 마감 요일 (1=월 ... 7=일)
+  /// weekly 주기의 마감 요일 여러 개 (예: [4, 7] = 매주 목·일). 비면 [dueWeekday] 하나.
+  final List<int> dueWeekdays;
+  /// 마감 시각 (자정 기준 분, 예: 1260 = 21:00). null = 23:59. 시간대 제한이 있으면 그 끝이 우선.
+  final int? deadlineMin;
   final String? mediaSource; // 명상 모드 배경 미디어 (로컬 파일 경로 / 오디오 URL / 유튜브 URL)
   final bool requireNote; // 소감/느낀점 필수 작성
   final int? windowStartMin; // 인증 가능 시작 시각 (자정 기준 분, 예: 300 = 05:00)
@@ -153,6 +157,14 @@ class Routine {
   int changeUsedCount; // 루틴 변경 찬스 사용 횟수 (최대 2회)
   final List<RoutineChange> changeLog; // 변경 이력 (날짜별 before→after)
   String? iconPath; // 사용자 지정 아이콘 사진 (MediaStore 경로, null = 기본 아이콘)
+
+  // ── 동호회 과제 연동 (Pro) ── 반장·부반장이 만든 공통 과제가 개인 루틴으로 들어온다.
+  // 내용·기간은 서버(동호회)가 관리하므로 개인이 바꿀 수 없고, 인증하면 동호회에도 제출된다.
+  final int? crewId;
+  final int? crewTaskId;
+  final String? crewName;
+  /// 과제 점검형 동호회 과제 — 인증 화면 대신 동호회 제출 양식으로 낸다
+  final bool crewAssignment;
 
   Routine({
     required this.id,
@@ -167,6 +179,8 @@ class Routine {
     this.timerMinutes = 15,
     this.targetSteps = 6000,
     this.dueWeekday = 7,
+    this.dueWeekdays = const [],
+    this.deadlineMin,
     this.mediaSource,
     this.requireNote = false,
     this.windowStartMin,
@@ -176,9 +190,27 @@ class Routine {
     this.changeUsedCount = 0,
     this.changeLog = const [],
     this.iconPath,
+    this.crewId,
+    this.crewTaskId,
+    this.crewName,
+    this.crewAssignment = false,
   })  : startDate = _dateOnly(startDate ?? createdAt),
         endDate = _dateOnly(
             endDate ?? (startDate ?? createdAt).add(const Duration(days: 62)));
+
+  /// 매주 마감 요일들 (오름차순)
+  List<int> get weeklyDueDays {
+    final days = dueWeekdays.where((d) => d >= 1 && d <= 7).toSet().toList()
+      ..sort();
+    return days.isEmpty ? [dueWeekday] : days;
+  }
+
+  /// "목·일" 같은 마감 요일 라벨
+  String get weeklyDueLabel =>
+      weeklyDueDays.map((d) => weekdayNames[d - 1]).join('·');
+
+  /// 동호회 과제에서 온 루틴인지
+  bool get isCrew => crewTaskId != null;
 
   /// 이 루틴이 결과형 주기인지 (기간 내 자유 인증)
   bool get isResultCycle => resultCycles.contains(dutyCycle);
@@ -224,8 +256,10 @@ class Routine {
     late DateTime due;
     switch (dutyCycle) {
       case DutyCycle.weekly:
-        // 다음(또는 오늘) dueWeekday
-        final diff = (dueWeekday - d.weekday + 7) % 7;
+        // 다음(또는 오늘) 마감 요일 — 여러 개면 가장 가까운 요일
+        final diff = weeklyDueDays
+            .map((wd) => (wd - d.weekday + 7) % 7)
+            .reduce((a, b) => a < b ? a : b);
         due = d.add(Duration(days: diff));
       case DutyCycle.every15days:
         final ds = d.difference(startDate).inDays;
@@ -286,10 +320,14 @@ class Routine {
       hasWindow ? '${_fmtMin(windowStartMin!)}~${_fmtMin(windowEndMin!)}' : '';
 
   /// 해당 날짜의 마감 시각 — 시간대 제한이 있으면 그 마감, 없으면 23:59
-  DateTime deadlineOf(DateTime date) => hasWindow
-      ? DateTime(date.year, date.month, date.day, windowEndMin! ~/ 60,
-          windowEndMin! % 60)
-      : DateTime(date.year, date.month, date.day, 23, 59, 0);
+  DateTime deadlineOf(DateTime date) {
+    final m = hasWindow ? windowEndMin! : (deadlineMin ?? 23 * 60 + 59);
+    return DateTime(date.year, date.month, date.day, m ~/ 60, m % 60);
+  }
+
+  /// 마감 시각 라벨 (예: "21:00")
+  String get deadlineLabel =>
+      _fmtMin(hasWindow ? windowEndMin! : (deadlineMin ?? 23 * 60 + 59));
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -304,6 +342,8 @@ class Routine {
         'timerMinutes': timerMinutes,
         'targetSteps': targetSteps,
         'dueWeekday': dueWeekday,
+        'dueWeekdays': dueWeekdays,
+        'deadlineMin': deadlineMin,
         'mediaSource': mediaSource,
         'requireNote': requireNote,
         'windowStartMin': windowStartMin,
@@ -313,6 +353,10 @@ class Routine {
         'changeUsedCount': changeUsedCount,
         'changeLog': changeLog.map((c) => c.toJson()).toList(),
         'iconPath': iconPath,
+        'crewId': crewId,
+        'crewTaskId': crewTaskId,
+        'crewName': crewName,
+        'crewAssignment': crewAssignment,
       };
 
   factory Routine.fromJson(Map<String, dynamic> j) => Routine(
@@ -333,6 +377,10 @@ class Routine {
         timerMinutes: (j['timerMinutes'] as num?)?.toInt() ?? 15,
         targetSteps: (j['targetSteps'] as num?)?.toInt() ?? 6000,
         dueWeekday: (j['dueWeekday'] as num?)?.toInt() ?? 7,
+        dueWeekdays: ((j['dueWeekdays'] as List?) ?? const [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+        deadlineMin: (j['deadlineMin'] as num?)?.toInt(),
         mediaSource: j['mediaSource'] as String?,
         requireNote: j['requireNote'] as bool? ?? false,
         windowStartMin: (j['windowStartMin'] as num?)?.toInt(),
@@ -350,6 +398,10 @@ class Routine {
                 .toList() ??
             const [],
         iconPath: j['iconPath'] as String?,
+        crewId: (j['crewId'] as num?)?.toInt(),
+        crewTaskId: (j['crewTaskId'] as num?)?.toInt(),
+        crewName: j['crewName'] as String?,
+        crewAssignment: j['crewAssignment'] as bool? ?? false,
       );
 }
 

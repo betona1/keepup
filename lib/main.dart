@@ -24,6 +24,8 @@ import 'screens/history_screen.dart';
 import 'screens/add_routine_screen.dart';
 import 'screens/notif_settings_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/crew_screen.dart';
+import 'services/crew_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +56,8 @@ Future<void> main() async {
   AutoUploadService.instance.provider = () => (state.routines, state.certs);
   await AutoUploadService.instance.init();
   AutoUploadService.instance.flushIfDirty(); // 지난번에 못 올린 게 있으면 재시도
+  // 동호회 과제(Pro) — 개인 루틴 연동과 미뤄 둔 제출 재시도
+  CrewSyncService.instance.attach(state);
 
   // 진행 중이던 타이머 세션 복원 (앱을 껐다 켜도 달리기·명상 시간이 이어짐)
   await TimerService.instance.load();
@@ -168,6 +172,9 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkPullRequest());
     // 웹: 폰이 자동으로 올려 둔 더 새로운 백업이 있으면 안내/자동 반영
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkWebCloudSync());
+    // 동호회 과제 동기화 + 결과 안내 (제출 실패를 조용히 넘기지 않는다)
+    CrewSyncService.instance.notices.addListener(_onCrewNotice);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncCrew());
     // 자동 스냅샷으로 데이터를 되살렸으면 사용자에게 알린다
     if (widget.state.restoredFromAutosave) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -186,7 +193,20 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    CrewSyncService.instance.notices.removeListener(_onCrewNotice);
     super.dispose();
+  }
+
+  void _onCrewNotice() {
+    final msg = CrewSyncService.instance.notices.value;
+    if (msg == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 5)));
+  }
+
+  Future<void> _syncCrew() async {
+    await CrewSyncService.instance.syncTasks();
+    await CrewSyncService.instance.flushQueue();
   }
 
   @override
@@ -206,6 +226,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
       AutoUploadService.instance.flushIfDirty();
       // 웹: 탭으로 돌아왔을 때도 새 백업이 있는지 확인
       _checkWebCloudSync();
+      // 반장이 바꾼 동호회 과제 반영 + 미뤄 둔 동호회 제출 재시도
+      _syncCrew();
     }
   }
 
@@ -430,7 +452,7 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final titles = ['습관챌린지', '기록 · 추억'];
+    final titles = ['습관챌린지', '기록 · 추억', '동호회 · Pro'];
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 66,
@@ -495,6 +517,7 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
         children: [
           HomeBody(state: widget.state),
           HistoryBody(state: widget.state),
+          CrewBody(state: widget.state),
         ],
       ),
       floatingActionButton: _index == 0
@@ -520,6 +543,10 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
               icon: Icon(Icons.photo_library_outlined),
               selectedIcon: Icon(Icons.photo_library),
               label: '기록'),
+          NavigationDestination(
+              icon: Icon(Icons.groups_outlined),
+              selectedIcon: Icon(Icons.groups),
+              label: '동호회'),
         ],
       ),
     );
