@@ -25,13 +25,16 @@ class AdminScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('메인 관리자'),
           bottom: const TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: '현황'),
+              Tab(text: '신고'),
               Tab(text: 'Pro 키'),
               Tab(text: 'Pro 회원'),
               Tab(text: '동호회'),
@@ -39,7 +42,13 @@ class AdminScreen extends StatelessWidget {
           ),
         ),
         body: const TabBarView(
-          children: [_OverviewTab(), _KeysTab(), _MembersTab(), _CrewsTab()],
+          children: [
+            _OverviewTab(),
+            _ReportsTab(),
+            _KeysTab(),
+            _MembersTab(),
+            _CrewsTab(),
+          ],
         ),
       ),
     );
@@ -100,6 +109,7 @@ class _OverviewTabState extends State<_OverviewTab> {
           : const Center(child: CircularProgressIndicator());
     }
     final tiles = [
+      (Icons.flag_outlined, '처리 대기 신고', '${o.reportsOpen}건'),
       (Icons.people_alt_outlined, '전체 회원', '${o.users}명'),
       (Icons.workspace_premium_outlined, 'Pro 이용 중', '${o.proActive}명'),
       (Icons.key_outlined, 'Pro 키 · 사용 가능 ${o.keysAvailable}', '${o.keys}개'),
@@ -596,6 +606,231 @@ class _CrewsTabState extends State<_CrewsTab> {
                   ),
                 ),
               )),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══ 신고 ════════════════════════════════════════════════════════════
+
+class _ReportsTab extends StatefulWidget {
+  const _ReportsTab();
+
+  @override
+  State<_ReportsTab> createState() => _ReportsTabState();
+}
+
+class _ReportsTabState extends State<_ReportsTab> {
+  List<ReportGroup>? _groups;
+  String? _error;
+  bool _all = false;
+  Map<String, String> _headers = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    CrewApi.imageHeaders().then((h) {
+      if (mounted) setState(() => _headers = h);
+    });
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final g = await CrewApi.adminReports(all: _all);
+      if (mounted) {
+        setState(() {
+          _groups = g;
+          _error = null;
+        });
+      }
+    } on CrewApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
+  Future<void> _act(ReportGroup g, String action) async {
+    final (title, body) = switch (action) {
+      'delete' => ('${g.typeLabel}을 삭제할까요?', '신고된 내용이 동호회에서 사라져요.'),
+      'hide_crew' => ('「${g.crewName}」 동호회를 숨길까요?', '회원 모두에게 보이지 않고 과제도 멈춰요. 동호회 탭에서 되살릴 수 있어요.'),
+      _ => ('문제없음으로 처리할까요?', '내용은 그대로 두고 신고만 닫아요.'),
+    };
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('처리')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await CrewApi.adminReportAction(g.targetType, g.targetId, action);
+      if (mounted) _snack(context, '처리했어요');
+      await _load();
+    } on CrewApiException catch (e) {
+      if (mounted) _snack(context, e.message);
+    }
+  }
+
+  void _openPhoto(String url) => showDialog(
+        context: context,
+        builder: (_) => Dialog(
+          clipBehavior: Clip.antiAlias,
+          child: InteractiveViewer(
+            child: Image.network(CrewApi.mediaUrl(url), headers: _headers, fit: BoxFit.contain),
+          ),
+        ),
+      );
+
+  Future<void> _openFile(({String name, String kind, String url}) f) async {
+    try {
+      final bytes = await CrewApi.download(f.url);
+      if (f.kind == 'photo') {
+        if (!mounted) return;
+        await showDialog(
+          context: context,
+          builder: (_) => Dialog(child: InteractiveViewer(child: Image.memory(bytes))),
+        );
+        return;
+      }
+      await SharePlus.instance.share(ShareParams(
+          files: [XFile.fromData(bytes, name: f.name)], fileNameOverrides: [f.name]));
+    } on CrewApiException catch (e) {
+      if (mounted) _snack(context, e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final groups = _groups;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _all,
+            onChanged: (v) {
+              setState(() {
+                _all = v;
+                _groups = null;
+              });
+              _load();
+            },
+            title: const Text('처리한 신고도 보기'),
+          ),
+          if (groups == null)
+            _error != null
+                ? _errorView(_error!, _load)
+                : const Padding(
+                    padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))
+          else if (groups.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Text('처리할 신고가 없어요 👍', textAlign: TextAlign.center),
+            )
+          else
+            ...groups.map((g) {
+              final open = g.status == 'open';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: open ? cs.errorContainer : cs.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(open ? '신고 ${g.count}건' : (g.action == 'none' ? '문제없음' : '처리됨'),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: open ? cs.onErrorContainer : null)),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text('${g.crewName} · ${g.typeLabel}',
+                              style: const TextStyle(fontWeight: FontWeight.w800)),
+                        ),
+                      ]),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('작성자: ${g.author ?? '-'}${g.exists ? '' : ' (이미 삭제됨)'}',
+                                style: const TextStyle(fontSize: 12)),
+                            if (g.title != null)
+                              Text(g.title!, style: const TextStyle(fontWeight: FontWeight.w700)),
+                            if (g.text?.isNotEmpty ?? false)
+                              Text(g.text!, maxLines: 8, overflow: TextOverflow.ellipsis),
+                            if (g.photoUrl != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: GestureDetector(
+                                  onTap: () => _openPhoto(g.photoUrl!),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(CrewApi.mediaUrl(g.photoUrl!),
+                                        headers: _headers, height: 120, fit: BoxFit.cover),
+                                  ),
+                                ),
+                              ),
+                            ...g.files.map((f) => TextButton.icon(
+                                  onPressed: () => _openFile(f),
+                                  icon: Icon(f.kind == 'photo'
+                                      ? Icons.image_outlined
+                                      : f.kind == 'audio'
+                                          ? Icons.graphic_eq
+                                          : Icons.description_outlined),
+                                  label: Text(f.name, overflow: TextOverflow.ellipsis),
+                                )),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ...g.reports.map((r) => Text(
+                            '• ${r.reason}${r.memo != null ? ' — ${r.memo}' : ''} (${r.reporter}, ${DateFormat('M/d HH:mm').format(r.at)})',
+                            style: const TextStyle(fontSize: 12),
+                          )),
+                      if (open) ...[
+                        const SizedBox(height: 8),
+                        Wrap(spacing: 8, runSpacing: 6, children: [
+                          if (g.exists)
+                            FilledButton.icon(
+                              onPressed: () => _act(g, 'delete'),
+                              style: FilledButton.styleFrom(backgroundColor: cs.error),
+                              icon: const Icon(Icons.delete_outline, size: 18),
+                              label: const Text('내용 삭제'),
+                            ),
+                          OutlinedButton(
+                              onPressed: () => _act(g, 'hide_crew'), child: const Text('동호회 숨기기')),
+                          TextButton(onPressed: () => _act(g, 'dismiss'), child: const Text('문제없음')),
+                        ]),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }),
         ],
       ),
     );

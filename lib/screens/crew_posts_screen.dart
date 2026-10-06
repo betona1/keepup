@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/crew.dart';
 import '../services/crew_api.dart';
 import '../theme.dart';
+import '../widgets/report_sheet.dart';
 
 String _when(DateTime t) {
   final now = DateTime.now();
@@ -347,6 +348,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 if (saved == true) _load();
               },
             ),
+          // 남의 글은 신고할 수 있다 (Play UGC 정책)
+          if (p != null && !p.canEdit)
+            IconButton(
+              tooltip: '신고',
+              icon: const Icon(Icons.flag_outlined),
+              onPressed: () => showReportSheet(context,
+                  crewId: widget.crewId,
+                  targetType: 'post',
+                  targetId: widget.postId),
+            ),
           if (p?.canDelete == true)
             IconButton(
               tooltip: '삭제',
@@ -397,6 +408,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             subtitle: Text(c.body,
                                 style: TextStyle(
                                     fontSize: 14, color: cs.onSurface)),
+                            onLongPress: () => showReportSheet(context,
+                                crewId: widget.crewId,
+                                targetType: 'comment',
+                                targetId: c.id),
                             trailing: c.canDelete
                                 ? IconButton(
                                     icon: const Icon(Icons.close, size: 18),
@@ -413,7 +428,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       }
                                     },
                                   )
-                                : null,
+                                : IconButton(
+                                    tooltip: '신고',
+                                    icon: const Icon(Icons.flag_outlined, size: 18),
+                                    onPressed: () => showReportSheet(context,
+                                        crewId: widget.crewId,
+                                        targetType: 'comment',
+                                        targetId: c.id),
+                                  ),
                           )),
                     ],
                   ),

@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/crew.dart';
 import '../services/crew_api.dart';
 import '../theme.dart';
+import '../widgets/report_sheet.dart';
 
 /// 제출 상세 — 답안·첨부를 보고, 반장·부반장은 '확인' 또는 '보완 요청'으로 점검한다.
 /// 회원끼리도 서로의 과제를 열어 볼 수 있다 (함께 배우기).
@@ -174,7 +175,20 @@ class _SubmissionDetailScreenState extends State<SubmissionDetailScreen> {
         if (!didPop) Navigator.pop(context, _changed);
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(d?.member?.displayName ?? '제출 내용')),
+        appBar: AppBar(
+          title: Text(d?.member?.displayName ?? '제출 내용'),
+          actions: [
+            if (d != null && !(d.member?.isMe ?? false))
+              IconButton(
+                tooltip: '신고',
+                icon: const Icon(Icons.flag_outlined),
+                onPressed: () => showReportSheet(context,
+                    crewId: widget.crewId,
+                    targetType: 'submission',
+                    targetId: widget.submissionId),
+              ),
+          ],
+        ),
         body: d == null
             ? Center(
                 child: _error != null

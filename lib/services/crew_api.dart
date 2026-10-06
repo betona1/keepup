@@ -95,6 +95,8 @@ class CrewApi {
     'invalid_form': '제출 양식을 확인해 주세요 (항목 이름이 비어 있거나 중복)',
     'kind_change': '과제 유형(인증형·점검형)은 바꿀 수 없어요. 새 과제로 만들어 주세요',
     'not_assignment': '과제 점검형에서만 회차 내용을 정할 수 있어요',
+    'own_content': '내가 쓴 글은 신고할 수 없어요',
+    'already_reported': '이미 신고한 내용이에요. 운영자가 확인 중이에요',
   };
 
   /// 서버 오류 코드 → 화면 문구 (제출 화면의 '지금 제출할 수 없는 이유' 등)
@@ -524,4 +526,32 @@ class CrewApi {
 
   static Future<void> adminSetCrewHidden(int crewId, bool hidden) =>
       _json('POST', '/api/admin/crews/$crewId/${hidden ? 'hide' : 'restore'}');
+
+  // ── 신고 ───────────────────────────────────────────────────────
+
+  static Future<void> report(int crewId,
+          {required String targetType,
+          required int targetId,
+          required String reason,
+          String? memo}) =>
+      _json('POST', '/api/crews/$crewId/reports', {
+        'targetType': targetType,
+        'targetId': targetId,
+        'reason': reason,
+        if (memo != null && memo.isNotEmpty) 'memo': memo,
+      });
+
+  static Future<List<ReportGroup>> adminReports({bool all = false}) async {
+    final d = await _get('/api/admin/reports${all ? '?status=all' : ''}')
+        as Map<String, dynamic>;
+    return (d['groups'] as List)
+        .map((e) => ReportGroup.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// action: delete(내용 삭제) | hide_crew(동호회 숨기기) | dismiss(문제없음)
+  static Future<void> adminReportAction(
+          String targetType, int targetId, String action) =>
+      _json('POST', '/api/admin/reports/action',
+          {'targetType': targetType, 'targetId': targetId, 'action': action});
 }

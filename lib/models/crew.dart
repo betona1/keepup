@@ -1123,6 +1123,7 @@ class AdminOverview {
   final int crewMembers;
   final int activeTasks;
   final int submissions7d;
+  final int reportsOpen;
   const AdminOverview({
     required this.users,
     required this.proActive,
@@ -1132,6 +1133,7 @@ class AdminOverview {
     required this.crewMembers,
     required this.activeTasks,
     required this.submissions7d,
+    this.reportsOpen = 0,
   });
 
   factory AdminOverview.fromJson(Map<String, dynamic> j) => AdminOverview(
@@ -1143,6 +1145,7 @@ class AdminOverview {
         crewMembers: _int(j['crewMembers']),
         activeTasks: _int(j['activeTasks']),
         submissions7d: _int(j['submissions7d']),
+        reportsOpen: _int(j['reportsOpen']),
       );
 }
 
@@ -1227,4 +1230,81 @@ class AdminCrewRow {
         createdAt: DateTime.parse(j['createdAt'] as String).toLocal(),
         deleted: j['deleted'] == true,
       );
+}
+
+/// 신고 (관리자 화면) — 같은 대상에 대한 신고를 묶은 것
+class ReportGroup {
+  final String targetType; // post | comment | submission
+  final int targetId;
+  final int crewId;
+  final String crewName;
+  final int count;
+  final String status; // open | resolved | dismissed
+  final String? action;
+  final DateTime latestAt;
+  final List<({String reporter, String reason, String? memo, DateTime at})>
+      reports;
+  final bool exists;
+  final String? author;
+  final String? title;
+  final String? text;
+  final String? photoUrl;
+  final List<({String name, String kind, String url})> files;
+  const ReportGroup({
+    required this.targetType,
+    required this.targetId,
+    required this.crewId,
+    required this.crewName,
+    required this.count,
+    required this.status,
+    this.action,
+    required this.latestAt,
+    required this.reports,
+    required this.exists,
+    this.author,
+    this.title,
+    this.text,
+    this.photoUrl,
+    this.files = const [],
+  });
+
+  String get typeLabel => switch (targetType) {
+        'post' => '게시글',
+        'comment' => '댓글',
+        _ => '과제 제출',
+      };
+
+  factory ReportGroup.fromJson(Map<String, dynamic> j) {
+    final p = (j['preview'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return ReportGroup(
+      targetType: j['targetType'] as String,
+      targetId: _int(j['targetId']),
+      crewId: _int(j['crewId']),
+      crewName: j['crewName'] as String? ?? '',
+      count: _int(j['count']),
+      status: j['status'] as String? ?? 'open',
+      action: j['action'] as String?,
+      latestAt: DateTime.parse(j['latestAt'] as String).toLocal(),
+      reports: ((j['reports'] as List?) ?? const [])
+          .map((e) => (
+                reporter: (e as Map)['reporter'] as String? ?? '',
+                reason: e['reasonLabel'] as String? ?? '',
+                memo: e['memo'] as String?,
+                at: DateTime.parse(e['createdAt'] as String).toLocal(),
+              ))
+          .toList(),
+      exists: p['exists'] == true,
+      author: p['author'] as String?,
+      title: p['title'] as String?,
+      text: p['text'] as String?,
+      photoUrl: p['photoUrl'] as String?,
+      files: ((p['files'] as List?) ?? const [])
+          .map((e) => (
+                name: (e as Map)['name'] as String? ?? '',
+                kind: e['kind'] as String? ?? 'file',
+                url: e['url'] as String? ?? '',
+              ))
+          .toList(),
+    );
+  }
 }
