@@ -199,6 +199,10 @@ class CrewTask {
   final CrewTaskKind kind;
   final List<int> dueWeekdays; // 매주 마감 요일들 (목·일 = [4, 7])
   final int? deadlineMin; // 마감 시각 (null = 23:59)
+  final ClassSchedule? classSchedule; // 요일별 수업 시작 + 마감 규칙
+
+  /// 요일별 마감 분 (그 날 자정 기준, 음수 = 전날) — 개인 루틴 알람·도장에 그대로 쓴다
+  Map<int, int> get dueTimes => classSchedule?.dueTimes ?? const {};
   final List<FormItem> form; // 과제 점검형 기본 제출 양식
   final RoutineType type;
   final String title;
@@ -224,6 +228,7 @@ class CrewTask {
     this.kind = CrewTaskKind.cert,
     this.dueWeekdays = const [],
     this.deadlineMin,
+    this.classSchedule,
     this.form = const [],
     required this.type,
     required this.title,
@@ -254,6 +259,9 @@ class CrewTask {
             .map((e) => (e as num).toInt())
             .toList(),
         deadlineMin: (j['deadlineMin'] as num?)?.toInt(),
+        classSchedule: j['classSchedule'] == null
+            ? null
+            : ClassSchedule.fromJson(j['classSchedule'] as Map<String, dynamic>),
         form: FormItem.listFrom(j['form']),
         type: RoutineType.values.byName(j['type'] as String),
         title: j['title'] as String,
@@ -280,6 +288,15 @@ class CrewTask {
   String get scheduleLabel {
     final time = fmtMinute(deadlineMin ?? 23 * 60 + 59);
     final days = dueWeekdays.isEmpty ? [dueWeekday] : dueWeekdays;
+    // 수업 시간표가 있으면 "매주 목 19:30·일 15:00 수업 · 1분 전 마감"
+    final cs = classSchedule;
+    if (dutyCycle == DutyCycle.weekly && cs != null && cs.days.isNotEmpty) {
+      final classes = days
+          .where((d) => cs.days[d] != null)
+          .map((d) => '${weekdayNames[d - 1]} ${fmtMinute(cs.days[d]!)}')
+          .join('·');
+      return '매주 $classes 수업 · ${cs.ruleLabel}';
+    }
     return switch (dutyCycle) {
       DutyCycle.weekly =>
         '매주 ${days.map((d) => weekdayNames[d - 1]).join('·')} $time 마감',
@@ -293,6 +310,7 @@ class CrewTask {
         'kind': kind.name,
         'dueWeekdays': dueWeekdays,
         'deadlineMin': deadlineMin,
+        'classSchedule': classSchedule?.toJson(),
         if (isAssignment) 'form': form.map((f) => f.toJson()).toList(),
         'type': type.name,
         'title': title,
@@ -342,6 +360,7 @@ class CrewTask {
       dueWeekday: dueWeekday,
       dueWeekdays: dueWeekdays,
       deadlineMin: deadlineMin,
+      dueDeadlines: dueTimes,
       mediaSource: existing?.mediaSource,
       requireNote: requireNote,
       windowStartMin: windowStartMin,
@@ -355,6 +374,50 @@ class CrewTask {
       crewAssignment: isAssignment,
     );
   }
+}
+
+/// 수업 시간표 — 요일별 수업 시작 시각과 마감 규칙 (서버 duty.ts ClassSchedule과 같다)
+///  - before: 수업 시작 [minutes]분 전 마감
+///  - prevDay: 수업 전날 [time](기본 23:59) 마감
+class ClassSchedule {
+  final Map<int, int> days; // {4: 1170} = 목 19:30
+  final String rule; // before | prevDay
+  final int minutes;
+  final int time;
+  const ClassSchedule({
+    required this.days,
+    this.rule = 'before',
+    this.minutes = 1,
+    this.time = 23 * 60 + 59,
+  });
+
+  bool get prevDay => rule == 'prevDay';
+
+  /// 요일별 마감 분 (그 날 자정 기준, 음수 = 전날: -1 = 전날 23:59)
+  Map<int, int> get dueTimes => {
+        for (final e in days.entries)
+          e.key: prevDay ? time - 1440 : e.value - minutes,
+      };
+
+  String get ruleLabel =>
+      prevDay ? '수업 전날 ${fmtMinute(time)} 마감' : '수업 $minutes분 전 마감';
+
+  factory ClassSchedule.fromJson(Map<String, dynamic> j) => ClassSchedule(
+        days: {
+          for (final e in ((j['days'] as Map?) ?? const {}).entries)
+            int.parse('${e.key}'): (e.value as num).toInt()
+        },
+        rule: j['rule'] == 'prevDay' ? 'prevDay' : 'before',
+        minutes: (j['minutes'] as num?)?.toInt() ?? 1,
+        time: (j['time'] as num?)?.toInt() ?? 23 * 60 + 59,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'days': {for (final e in days.entries) '${e.key}': e.value},
+        'rule': rule,
+        'minutes': minutes,
+        'time': time,
+      };
 }
 
 /// 자정 기준 분 → "21:00"

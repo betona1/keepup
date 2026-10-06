@@ -148,6 +148,9 @@ class Routine {
   final List<int> dueWeekdays;
   /// 마감 시각 (자정 기준 분, 예: 1260 = 21:00). null = 23:59. 시간대 제한이 있으면 그 끝이 우선.
   final int? deadlineMin;
+  /// 요일별 마감 분 {4: 1169} — 동호회 수업 시간표에서 계산(수업 N분 전 / 전날 밤).
+  /// 음수면 전날(-1 = 전날 23:59). 있으면 [deadlineMin]보다 우선
+  final Map<int, int> dueDeadlines;
   final String? mediaSource; // 명상 모드 배경 미디어 (로컬 파일 경로 / 오디오 URL / 유튜브 URL)
   final bool requireNote; // 소감/느낀점 필수 작성
   final int? windowStartMin; // 인증 가능 시작 시각 (자정 기준 분, 예: 300 = 05:00)
@@ -181,6 +184,7 @@ class Routine {
     this.dueWeekday = 7,
     this.dueWeekdays = const [],
     this.deadlineMin,
+    this.dueDeadlines = const {},
     this.mediaSource,
     this.requireNote = false,
     this.windowStartMin,
@@ -320,14 +324,25 @@ class Routine {
       hasWindow ? '${_fmtMin(windowStartMin!)}~${_fmtMin(windowEndMin!)}' : '';
 
   /// 해당 날짜의 마감 시각 — 시간대 제한이 있으면 그 마감, 없으면 23:59
-  DateTime deadlineOf(DateTime date) {
-    final m = hasWindow ? windowEndMin! : (deadlineMin ?? 23 * 60 + 59);
-    return DateTime(date.year, date.month, date.day, m ~/ 60, m % 60);
+  /// 마감 분이 음수면 전날 (예: -1 = 전날 23:59 — '수업 전날 밤 마감')
+  DateTime deadlineOf(DateTime date) =>
+      DateTime(date.year, date.month, date.day)
+          .add(Duration(minutes: deadlineMinuteOn(date)));
+
+  /// 그 날의 마감 분 — 시간대 제한 끝 > 요일별 마감 > 공통 마감 시각 > 23:59
+  /// (서버 duty.ts deadlineMinuteOn과 같다)
+  int deadlineMinuteOn(DateTime date) {
+    if (hasWindow) return windowEndMin!;
+    return dueDeadlines[date.weekday] ?? deadlineMin ?? 23 * 60 + 59;
   }
 
-  /// 마감 시각 라벨 (예: "21:00")
-  String get deadlineLabel =>
-      _fmtMin(hasWindow ? windowEndMin! : (deadlineMin ?? 23 * 60 + 59));
+  /// 마감 시각 라벨 (예: "21:00") — 요일별이 다르면 첫 요일 기준
+  String get deadlineLabel => _fmtMin(hasWindow
+      ? windowEndMin!
+      : (dueDeadlines.isNotEmpty
+              ? dueDeadlines[weeklyDueDays.first] ?? dueDeadlines.values.first
+              : (deadlineMin ?? 23 * 60 + 59)) %
+          1440);
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -344,6 +359,9 @@ class Routine {
         'dueWeekday': dueWeekday,
         'dueWeekdays': dueWeekdays,
         'deadlineMin': deadlineMin,
+        'dueDeadlines': {
+          for (final e in dueDeadlines.entries) '${e.key}': e.value
+        },
         'mediaSource': mediaSource,
         'requireNote': requireNote,
         'windowStartMin': windowStartMin,
@@ -381,6 +399,11 @@ class Routine {
             .map((e) => (e as num).toInt())
             .toList(),
         deadlineMin: (j['deadlineMin'] as num?)?.toInt(),
+        dueDeadlines: {
+          for (final e
+              in ((j['dueDeadlines'] as Map?) ?? const {}).entries)
+            int.parse('${e.key}'): (e.value as num).toInt()
+        },
         mediaSource: j['mediaSource'] as String?,
         requireNote: j['requireNote'] as bool? ?? false,
         windowStartMin: (j['windowStartMin'] as num?)?.toInt(),

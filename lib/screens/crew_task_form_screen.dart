@@ -35,6 +35,14 @@ class _CrewTaskFormScreenState extends State<CrewTaskFormScreen> {
             : const [4, 7],
   };
   late int? _deadlineMin = widget.initial?.deadlineMin;
+  /// 요일별 '수업 시작 시각'(분)과 마감 규칙 — 수업 N분 전 / 수업 전날 밤
+  late final Map<int, int> _classStart = {
+    ...?widget.initial?.classSchedule?.days,
+  };
+  late bool _prevDay = widget.initial?.classSchedule?.prevDay ?? false;
+  late final _beforeMin = TextEditingController(
+      text: '${widget.initial?.classSchedule?.minutes ?? 1}');
+  late int _prevDayTime = widget.initial?.classSchedule?.time ?? 23 * 60 + 59;
   late List<FormItem> _form = (widget.initial?.form.isNotEmpty ?? false)
       ? widget.initial!.form
       : CrewFormEditor.starter;
@@ -67,6 +75,7 @@ class _CrewTaskFormScreenState extends State<CrewTaskFormScreen> {
     _title.dispose();
     _reason.dispose();
     _backup.dispose();
+    _beforeMin.dispose();
     super.dispose();
   }
 
@@ -85,6 +94,16 @@ class _CrewTaskFormScreenState extends State<CrewTaskFormScreen> {
     final t = await showTimePicker(
         context: context, initialTime: TimeOfDay(hour: m ~/ 60, minute: m % 60));
     return t == null ? null : t.hour * 60 + t.minute;
+  }
+
+  /// 그 요일의 실제 마감 안내 — "목 19:29 마감", "수 23:59 마감(전날)"
+  String _deadlineText(int day, int start) {
+    final m = _prevDay
+        ? _prevDayTime - 1440
+        : start - (int.tryParse(_beforeMin.text.trim()) ?? 1);
+    final prev = m < 0;
+    final dayName = weekdayNames[(day - 1 + (prev ? 6 : 0)) % 7];
+    return '$dayName ${fmtMinute((m + 1440) % 1440)} 마감${prev ? ' (전날)' : ''}';
   }
 
   void _snack(String msg) => ScaffoldMessenger.of(context)
@@ -109,6 +128,20 @@ class _CrewTaskFormScreenState extends State<CrewTaskFormScreen> {
       kind: _kind,
       dueWeekdays: !_cert && _cycle == DutyCycle.weekly ? days : const [],
       deadlineMin: _cert ? null : _deadlineMin,
+      // 수업 시간표 (선택한 요일만) — 마감은 규칙대로 계산된다
+      classSchedule: !_cert &&
+              _cycle == DutyCycle.weekly &&
+              days.any((d) => _classStart[d] != null)
+          ? ClassSchedule(
+              days: {
+                for (final d in days)
+                  if (_classStart[d] != null) d: _classStart[d]!
+              },
+              rule: _prevDay ? 'prevDay' : 'before',
+              minutes: (int.tryParse(_beforeMin.text.trim()) ?? 1).clamp(0, 1440),
+              time: _prevDayTime,
+            )
+          : null,
       form: _cert ? const [] : _form,
       type: _cert ? RoutineType.accumulate : RoutineType.result,
       title: title,
@@ -261,11 +294,96 @@ class _CrewTaskFormScreenState extends State<CrewTaskFormScreen> {
               }),
             ),
           ],
+          if (!_cert && _cycle == DutyCycle.weekly && _days.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Text('요일별 수업 시작 시각 (비워 둔 요일은 아래 공통 마감 시각)',
+                style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 6),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('수업 N분 전 마감')),
+                ButtonSegment(value: true, label: Text('수업 전날 밤 마감')),
+              ],
+              selected: {_prevDay},
+              onSelectionChanged: (v) => setState(() => _prevDay = v.first),
+            ),
+            const SizedBox(height: 6),
+            if (!_prevDay)
+              Row(
+                children: [
+                  const Text('수업 시작'),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 72,
+                    child: TextField(
+                      controller: _beforeMin,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                          isDense: true, border: OutlineInputBorder()),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('분 전에 마감'),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  const Text('수업 전날'),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: () async {
+                      final m = await _pickTime(_prevDayTime);
+                      if (m != null) setState(() => _prevDayTime = m);
+                    },
+                    child: Text(fmtMinute(_prevDayTime)),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('까지 마감'),
+                ],
+              ),
+            ...(_days.toList()..sort()).map((d) {
+              final start = _classStart[d];
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: CircleAvatar(
+                    radius: 16, child: Text(weekdayNames[d - 1])),
+                title: Text(start == null
+                    ? '${weekdayNames[d - 1]}요일 수업 시각 미정'
+                    : '${weekdayNames[d - 1]}요일 ${fmtMinute(start)} 수업'),
+                subtitle: Text(start == null
+                    ? '공통 마감 ${fmtMinute(_deadlineMin ?? 23 * 60 + 59)}'
+                    : _deadlineText(d, start)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () async {
+                        final m = await _pickTime(start ?? 21 * 60);
+                        if (m == null) return;
+                        setState(() => _classStart[d] = m);
+                      },
+                      child: Text(start == null ? '수업 시각' : fmtMinute(start)),
+                    ),
+                    if (start != null)
+                      IconButton(
+                        tooltip: '지우기',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => setState(() => _classStart.remove(d)),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
           if (!_cert)
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.schedule),
-              title: const Text('마감 시각'),
+              title: Text(_cycle == DutyCycle.weekly ? '공통 마감 시각' : '마감 시각'),
               subtitle: const Text('이 시각이 지나면 제출할 수 없어요 (알람도 이 시각 기준)'),
               trailing: OutlinedButton(
                 onPressed: () async {

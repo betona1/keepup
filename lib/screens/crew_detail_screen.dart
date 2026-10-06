@@ -85,6 +85,8 @@ class _CrewDetailScreenState extends State<CrewDetailScreen> {
   Future<void> _menu(String v) async {
     final d = _d!;
     switch (v) {
+      case 'handover':
+        await _handover(d);
       case 'settings':
         final body = await showDialog<Map<String, dynamic>>(
             context: context,
@@ -115,6 +117,75 @@ class _CrewDetailScreenState extends State<CrewDetailScreen> {
           }
         }
     }
+  }
+
+  /// 반장 넘기기 — 앱을 쓰는 회원 중에서 고르면, 그 사람이 반장이 되고 나는 부반장이 된다
+  Future<void> _handover(CrewDetail d) async {
+    final candidates =
+        d.members.where((m) => !m.isMe && !m.offline).toList();
+    if (candidates.isEmpty) {
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('넘길 회원이 없어요'),
+          content: const Text('반장은 앱(또는 웹앱)에 로그인해 동호회에 가입한 회원에게만 넘길 수 있어요.\n\n'
+              '새 반장님이 Pro 키를 등록하고 초대코드로 먼저 가입하게 해 주세요. '
+              '(앱 미설치 회원으로 등록된 사람에게는 넘길 수 없어요)'),
+          actions: [
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('확인')),
+          ],
+        ),
+      );
+      return;
+    }
+    final target = await showModalBottomSheet<CrewMember>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(
+                title: Text('누구에게 반장을 넘길까요?',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: Text('넘기면 나는 자동으로 부반장이 돼요'),
+              ),
+              const Divider(height: 1),
+              ...candidates.map((m) => ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: m.avatarUrl != null
+                          ? NetworkImage(m.avatarUrl!)
+                          : null,
+                      child: m.avatarUrl == null
+                          ? Text(m.displayName.isEmpty
+                              ? '?'
+                              : m.displayName.characters.first)
+                          : null,
+                    ),
+                    title: Text(m.displayName),
+                    subtitle: Text(m.role.label),
+                    onTap: () => Navigator.pop(ctx, m),
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (target == null || !mounted) return;
+    if (!await _confirm('${target.displayName} 님에게 반장을 넘길까요?',
+        '${target.displayName} 님이 반장이 되고, 나는 부반장이 돼요.\n'
+            '부반장도 과제 올리기·점검·통계·정산·미설치 회원 관리는 그대로 할 수 있어요.\n'
+            '되돌리려면 새 반장님이 다시 넘겨 줘야 해요.')) {
+      return;
+    }
+    await _run(
+        () => CrewApi.updateMember(d.crew.id, target.id, {'role': 'leader'}),
+        done: '${target.displayName} 님이 반장이 됐어요. 나는 부반장이에요 ✅');
   }
 
   Future<bool> _confirm(String title, String body) async =>
@@ -175,6 +246,9 @@ class _CrewDetailScreenState extends State<CrewDetailScreen> {
               itemBuilder: (_) => [
                 if (role == CrewRole.leader)
                   const PopupMenuItem(value: 'settings', child: Text('동호회 설정')),
+                if (role == CrewRole.leader)
+                  const PopupMenuItem(
+                      value: 'handover', child: Text('반장 넘기기')),
                 if (role != CrewRole.leader)
                   const PopupMenuItem(value: 'leave', child: Text('동호회 나가기')),
                 if (role == CrewRole.leader)
@@ -378,7 +452,7 @@ class _BoardTabState extends State<_BoardTab> {
           state: widget.state,
           crewId: widget.detail.crew.id,
           taskId: t.task.id,
-          dateKey: t.dutyKey,
+          // 회차는 서버가 정한다 — 이번 회차 마감이 지났으면 다음 회차로
           routine: widget.state.routineById(CrewTask.routineIdFor(t.task.id)),
         ),
       ),

@@ -88,6 +88,50 @@ void main() {
       expect(again.title, '독서 30분');
     });
 
+    CrewTask classTask(ClassSchedule cs) => CrewTask(
+          id: 11,
+          crewId: 3,
+          kind: CrewTaskKind.assignment,
+          dueWeekdays: const [4, 7],
+          classSchedule: cs,
+          type: RoutineType.result,
+          title: '주간 과제',
+          reason: '',
+          dutyCycle: DutyCycle.weekly,
+          dueWeekday: 4,
+          verifyMethod: VerifyMethod.photo,
+          timerMinutes: 15,
+          requireNote: false,
+          startDate: '2026-10-05',
+          endDate: '2026-12-31',
+          archived: false,
+        );
+
+    test('수업 시간표: 목 19:30·일 15:00 수업, 1분 전 마감', () {
+      final t = classTask(const ClassSchedule(
+          days: {4: 19 * 60 + 30, 7: 15 * 60}, rule: 'before', minutes: 1));
+      final r = t.toRoutine();
+      // 목(10/8) 19:29, 일(10/11) 14:59 — 마감 알람도 이 시각 기준
+      expect(r.deadlineOf(DateTime(2026, 10, 8)), DateTime(2026, 10, 8, 19, 29));
+      expect(r.deadlineOf(DateTime(2026, 10, 11)), DateTime(2026, 10, 11, 14, 59));
+      expect(t.scheduleLabel, '매주 목 19:30·일 15:00 수업 · 수업 1분 전 마감');
+      final back = Routine.fromJson(r.toJson());
+      expect(back.deadlineOf(DateTime(2026, 10, 11)), DateTime(2026, 10, 11, 14, 59));
+    });
+
+    test('수업 시간표: 수업 30분 전 / 수업 전날 23:59 마감', () {
+      final r30 = classTask(const ClassSchedule(
+              days: {4: 19 * 60 + 30, 7: 15 * 60}, rule: 'before', minutes: 30))
+          .toRoutine();
+      expect(r30.deadlineOf(DateTime(2026, 10, 8)), DateTime(2026, 10, 8, 19));
+      final prev = classTask(const ClassSchedule(
+              days: {4: 19 * 60 + 30, 7: 15 * 60}, rule: 'prevDay'))
+          .toRoutine();
+      // 목요일 회차는 수요일 23:59, 일요일 회차는 토요일 23:59에 마감
+      expect(prev.deadlineOf(DateTime(2026, 10, 8)), DateTime(2026, 10, 7, 23, 59));
+      expect(prev.deadlineOf(DateTime(2026, 10, 11)), DateTime(2026, 10, 10, 23, 59));
+    });
+
     test('과제 점검형: 매주 목·일 21:00 마감이 개인 루틴에 그대로 들어온다', () {
       final t = CrewTask(
         id: 9,
