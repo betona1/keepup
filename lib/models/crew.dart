@@ -26,11 +26,13 @@ class ProStatus {
   final bool lifetime;
   final DateTime? expiresAt;
   final bool admin;
+  final bool mainAdmin; // 메인 관리자(netkjy@gmail.com) — 키 발행·Pro 회원·동호회 전체 관리
   const ProStatus(
       {required this.pro,
       required this.lifetime,
       this.expiresAt,
-      required this.admin});
+      required this.admin,
+      this.mainAdmin = false});
 
   static const none = ProStatus(pro: false, lifetime: false, admin: false);
 
@@ -41,6 +43,7 @@ class ProStatus {
             ? null
             : DateTime.tryParse(j['expiresAt'] as String)?.toLocal(),
         admin: j['admin'] == true,
+        mainAdmin: j['mainAdmin'] == true,
       );
 }
 
@@ -1043,4 +1046,122 @@ class CrewPostDetail {
           .toList(),
     );
   }
+}
+
+
+// ── 메인 관리자 ─────────────────────────────────────────────────────
+
+class AdminOverview {
+  final int users;
+  final int proActive;
+  final int keys;
+  final int keysAvailable;
+  final int crews;
+  final int crewMembers;
+  final int activeTasks;
+  final int submissions7d;
+  const AdminOverview({
+    required this.users,
+    required this.proActive,
+    required this.keys,
+    required this.keysAvailable,
+    required this.crews,
+    required this.crewMembers,
+    required this.activeTasks,
+    required this.submissions7d,
+  });
+
+  factory AdminOverview.fromJson(Map<String, dynamic> j) => AdminOverview(
+        users: _int(j['users']),
+        proActive: _int(j['proActive']),
+        keys: _int(j['keys']),
+        keysAvailable: _int(j['keysAvailable']),
+        crews: _int(j['crews']),
+        crewMembers: _int(j['crewMembers']),
+        activeTasks: _int(j['activeTasks']),
+        submissions7d: _int(j['submissions7d']),
+      );
+}
+
+/// Pro 회원 (관리자 목록) / 회원 검색 결과 공용
+class AdminUserRow {
+  final int userId;
+  final String name;
+  final String? email;
+  final String provider;
+  final bool admin;
+  final bool pro;
+  final DateTime? expiresAt; // null + pro = 평생
+  final int keysUsed;
+  const AdminUserRow({
+    required this.userId,
+    required this.name,
+    this.email,
+    required this.provider,
+    required this.admin,
+    required this.pro,
+    this.expiresAt,
+    this.keysUsed = 0,
+  });
+
+  String get providerLabel => switch (provider) {
+        'google' => '구글',
+        'kakao' => '카카오',
+        'naver' => '네이버',
+        'email' => '이메일',
+        _ => provider,
+      };
+
+  factory AdminUserRow.fromJson(Map<String, dynamic> j) => AdminUserRow(
+        userId: _int(j['userId'] ?? j['id']),
+        name: j['name'] as String? ?? '',
+        email: j['email'] as String?,
+        provider: j['provider'] as String? ?? '',
+        admin: j['admin'] == true,
+        pro: j['active'] == true || j['pro'] == true,
+        expiresAt: j['expiresAt'] == null
+            ? null
+            : DateTime.parse(j['expiresAt'] as String).toLocal(),
+        keysUsed: _int(j['keysUsed']),
+      );
+}
+
+class AdminCrewRow {
+  final int id;
+  final String name;
+  final String startDate;
+  final String endDate;
+  final String? leader;
+  final int memberCount;
+  final int taskCount;
+  final DateTime? lastSubmissionAt;
+  final DateTime createdAt;
+  final bool deleted;
+  const AdminCrewRow({
+    required this.id,
+    required this.name,
+    required this.startDate,
+    required this.endDate,
+    this.leader,
+    required this.memberCount,
+    required this.taskCount,
+    this.lastSubmissionAt,
+    required this.createdAt,
+    required this.deleted,
+  });
+
+  factory AdminCrewRow.fromJson(Map<String, dynamic> j) => AdminCrewRow(
+        id: _int(j['id']),
+        name: j['name'] as String,
+        startDate: j['startDate'] as String,
+        endDate: j['endDate'] as String,
+        leader: j['leader'] as String?,
+        memberCount: _int(j['memberCount']),
+        taskCount: _int(j['taskCount']),
+        lastSubmissionAt: j['lastSubmissionAt'] == null
+            ? null
+            : DateTime.parse(j['lastSubmissionAt'] as String).toLocal(),
+        createdAt: DateTime.parse(j['createdAt'] as String).toLocal(),
+        deleted: j['deleted'] == true,
+      );
 }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../models/crew.dart';
 import '../services/crew_api.dart';
 import '../theme.dart';
+import 'admin_screen.dart';
 
 /// Pro 키 등록 + (관리자) Pro 키 발행·관리.
 class ProScreen extends StatefulWidget {
@@ -20,7 +20,6 @@ class _ProScreenState extends State<ProScreen> {
   String? _error;
   final _code = TextEditingController();
   bool _busy = false;
-  List<ProKey>? _keys;
 
   @override
   void initState() {
@@ -37,12 +36,9 @@ class _ProScreenState extends State<ProScreen> {
   Future<void> _load() async {
     try {
       final s = await CrewApi.proStatus();
-      List<ProKey>? keys;
-      if (s.admin) keys = await CrewApi.listKeys();
       if (!mounted) return;
       setState(() {
         _status = s;
-        _keys = keys;
         _error = null;
       });
     } on CrewApiException catch (e) {
@@ -50,8 +46,8 @@ class _ProScreenState extends State<ProScreen> {
     }
   }
 
-  void _snack(String msg) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(msg)));
+  void _snack(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   Future<void> _redeem() async {
     final code = _code.text.trim();
@@ -69,45 +65,6 @@ class _ProScreenState extends State<ProScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
-
-  Future<void> _issue() async {
-    final result = await showDialog<List<String>>(
-      context: context,
-      builder: (_) => const _IssueDialog(),
-    );
-    if (result == null || !mounted) return;
-    await _load();
-    if (!mounted) return;
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('키 ${result.length}개 발행 완료'),
-        content: SelectableText(result.join('\n'),
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 15)),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: result.join('\n')));
-              Navigator.pop(ctx);
-              _snack('복사했어요');
-            },
-            child: const Text('복사'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              SharePlus.instance.share(ShareParams(text: _shareText(result)));
-            },
-            child: const Text('공유'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _shareText(List<String> codes) =>
-      '[습관챌린지 Pro 키]\n${codes.join('\n')}\n\n'
-      '앱 → 동호회 탭 → Pro 키 등록에 입력하세요.';
 
   @override
   Widget build(BuildContext context) {
@@ -134,12 +91,12 @@ class _ProScreenState extends State<ProScreen> {
             const Text('Pro로 할 수 있는 것',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
-            const _Feature(Icons.groups_rounded, '동호회 만들기·가입',
-                '반장·부반장을 정하고 함께 습관을 지켜요'),
+            const _Feature(
+                Icons.groups_rounded, '동호회 만들기·가입', '반장·부반장을 정하고 함께 습관을 지켜요'),
             const _Feature(Icons.assignment_turned_in_outlined, '공통 과제',
                 '반장이 만든 과제가 내 루틴으로 들어오고, 도장을 찍으면 자동 제출'),
-            const _Feature(Icons.fact_check_outlined, '제출 현황판',
-                '마감까지 누가 냈고 누가 아직인지 한눈에'),
+            const _Feature(
+                Icons.fact_check_outlined, '제출 현황판', '마감까지 누가 냈고 누가 아직인지 한눈에'),
             const _Feature(Icons.insights_outlined, '통계·정산',
                 '미제출 집계, 벌금·상금 정산, 앱 미설치 회원까지 관리'),
             const SizedBox(height: 20),
@@ -169,61 +126,18 @@ class _ProScreenState extends State<ProScreen> {
               Text('키는 동호회 반장이나 운영자에게 받을 수 있어요.',
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             ],
-            if (s?.admin == true) ...[
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text('관리자 · Pro 키 발행',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w800, fontSize: 16)),
-                  ),
-                  FilledButton.icon(
-                    onPressed: _issue,
-                    icon: const Icon(Icons.add),
-                    label: const Text('키 발행'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_keys == null)
-                const Center(child: CircularProgressIndicator())
-              else if (_keys!.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('아직 발행한 키가 없어요'),
-                )
-              else
-                ..._keys!.map((k) => _KeyTile(
-                      k: k,
-                      onShare: () => SharePlus.instance
-                          .share(ShareParams(text: _shareText([k.code]))),
-                      onRevoke: () async {
-                        final ok = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('키를 폐기할까요?'),
-                            content: Text(
-                                '${k.code}\n더 이상 등록할 수 없게 돼요. 이미 등록한 회원의 Pro는 유지돼요.'),
-                            actions: [
-                              TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('취소')),
-                              FilledButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('폐기')),
-                            ],
-                          ),
-                        );
-                        if (ok != true) return;
-                        try {
-                          await CrewApi.revokeKey(k.id);
-                          await _load();
-                        } on CrewApiException catch (e) {
-                          _snack(e.message);
-                        }
-                      },
-                    )),
-            ],
+            if (s?.mainAdmin == true)
+              FilledButton.icon(
+                onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AdminScreen())),
+                icon: const Icon(Icons.admin_panel_settings_outlined),
+                label: const Text('관리자 화면 (키 발행·Pro 회원·동호회 전체)'),
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52)),
+              )
+            else if (s?.admin == true)
+              Text('관리자 계정이지만 Pro 키 발행은 메인 관리자만 할 수 있어요.',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           ],
         ),
       ),
@@ -304,12 +218,15 @@ class _Feature extends StatelessWidget {
       );
 }
 
-class _KeyTile extends StatelessWidget {
+class ProKeyTile extends StatelessWidget {
   final ProKey k;
   final VoidCallback onShare;
   final VoidCallback onRevoke;
-  const _KeyTile(
-      {required this.k, required this.onShare, required this.onRevoke});
+  const ProKeyTile(
+      {super.key,
+      required this.k,
+      required this.onShare,
+      required this.onRevoke});
 
   @override
   Widget build(BuildContext context) {
@@ -335,8 +252,8 @@ class _KeyTile extends StatelessWidget {
                 onSelected: (v) {
                   if (v == 'copy') {
                     Clipboard.setData(ClipboardData(text: k.code));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('복사했어요')));
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(const SnackBar(content: Text('복사했어요')));
                   }
                   if (v == 'share') onShare();
                   if (v == 'revoke') onRevoke();
@@ -353,14 +270,14 @@ class _KeyTile extends StatelessWidget {
 }
 
 /// 키 발행 옵션 — 기간 / 1개당 사용 인원 / 개수 / 메모
-class _IssueDialog extends StatefulWidget {
-  const _IssueDialog();
+class IssueKeyDialog extends StatefulWidget {
+  const IssueKeyDialog({super.key});
 
   @override
-  State<_IssueDialog> createState() => _IssueDialogState();
+  State<IssueKeyDialog> createState() => _IssueKeyDialogState();
 }
 
-class _IssueDialogState extends State<_IssueDialog> {
+class _IssueKeyDialogState extends State<IssueKeyDialog> {
   int? _days = 365;
   int _maxUses = 1;
   int _count = 1;
@@ -446,12 +363,9 @@ class _IssueDialogState extends State<_IssueDialog> {
             const SizedBox(height: 8),
             _stepper('키 1개당 사용 인원', _maxUses, 1, 100,
                 (v) => setState(() => _maxUses = v)),
-            _stepper('발행 개수', _count, 1, 20,
-                (v) => setState(() => _count = v)),
+            _stepper('발행 개수', _count, 1, 20, (v) => setState(() => _count = v)),
             Text(
-              _maxUses > 1
-                  ? '동호회 단위 배포: 키 1개를 $_maxUses명이 함께 써요'
-                  : '1인용 키',
+              _maxUses > 1 ? '동호회 단위 배포: 키 1개를 $_maxUses명이 함께 써요' : '1인용 키',
               style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 8),
@@ -470,8 +384,7 @@ class _IssueDialogState extends State<_IssueDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소')),
+            onPressed: () => Navigator.pop(context), child: const Text('취소')),
         FilledButton(
             onPressed: _busy ? null : _submit,
             child: Text(_busy ? '발행 중…' : '발행')),

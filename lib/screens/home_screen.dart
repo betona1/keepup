@@ -10,6 +10,7 @@ import '../services/media_store.dart';
 import '../services/quote_service.dart';
 import '../theme.dart';
 import 'crew_assignment_screen.dart';
+import 'admin_screen.dart';
 import '../widgets/cert_photo.dart';
 import '../widgets/cloud_sync_sheet.dart';
 import '../widgets/marquee_text.dart';
@@ -433,6 +434,20 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
                 widget.onOpenCloudSync?.call();
               },
             ),
+            // 관리자 계정 — 메인 관리자 화면 (권한은 서버가 netkjy@gmail.com인지 다시 확인)
+            if (_account!.role == 'admin') ...[
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('관리자 화면'),
+                subtitle: const Text('Pro 키 발행 · Pro 회원 · 동호회 전체'),
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const AdminScreen()));
+                },
+              ),
+            ],
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.logout),

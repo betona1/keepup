@@ -486,4 +486,42 @@ class CrewApi {
 
   static Future<void> deleteComment(int crewId, int commentId) =>
       _json('DELETE', '/api/crews/$crewId/comments/$commentId');
+
+  // ── 메인 관리자 ─────────────────────────────────────────────────
+
+  static Future<AdminOverview> adminOverview() async => AdminOverview.fromJson(
+      await _get('/api/admin/overview') as Map<String, dynamic>);
+
+  static Future<List<AdminUserRow>> adminProMembers() async {
+    final d = await _get('/api/admin/pro-members') as Map<String, dynamic>;
+    return (d['members'] as List)
+        .map((e) => AdminUserRow.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<List<AdminUserRow>> adminSearchUsers(String q) async {
+    final d = await _get('/api/admin/users?q=${Uri.encodeQueryComponent(q)}')
+        as Map<String, dynamic>;
+    return (d['users'] as List)
+        .map((e) => AdminUserRow.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Pro 직접 지급·연장(days: null = 평생) / 해지
+  static Future<void> adminGrantPro(int userId, {int? days}) =>
+      _json('POST', '/api/admin/pro-members/$userId',
+          {'action': 'grant', 'days': days});
+
+  static Future<void> adminRevokePro(int userId) =>
+      _json('POST', '/api/admin/pro-members/$userId', {'action': 'revoke'});
+
+  static Future<List<AdminCrewRow>> adminCrews() async {
+    final d = await _get('/api/admin/crews') as Map<String, dynamic>;
+    return (d['crews'] as List)
+        .map((e) => AdminCrewRow.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<void> adminSetCrewHidden(int crewId, bool hidden) =>
+      _json('POST', '/api/admin/crews/$crewId/${hidden ? 'hide' : 'restore'}');
 }

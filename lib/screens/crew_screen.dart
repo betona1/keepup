@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../widgets/login_sheet.dart';
 import 'crew_detail_screen.dart';
 import 'pro_screen.dart';
+import 'admin_screen.dart';
 
 /// 하단 '동호회' 탭 — 내 동호회 목록 · 만들기 · 초대코드로 가입 (Pro 기능)
 class CrewBody extends StatefulWidget {
@@ -74,8 +75,12 @@ class CrewBodyState extends State<CrewBody> {
       .showSnackBar(SnackBar(content: Text(msg)));
 
   Future<void> _openPro() async {
+    // 메인 관리자는 바로 관리자 화면(키 발행·Pro 회원·동호회 전체)으로
     await Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const ProScreen()));
+        context,
+        MaterialPageRoute(
+            builder: (_) =>
+                _pro.mainAdmin ? const AdminScreen() : const ProScreen()));
     await refresh();
   }
 
@@ -274,8 +279,10 @@ class _ProBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = pro.admin
-        ? 'Pro · 관리자 (키 발행)'
+    final label = pro.mainAdmin
+        ? '메인 관리자 · 키 발행 · Pro 회원 · 동호회 전체'
+        : pro.admin
+        ? 'Pro · 관리자'
         : pro.pro
             ? (pro.lifetime
                 ? 'Pro 이용 중 · 평생'
@@ -299,7 +306,9 @@ class _ProBanner extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                    pro.pro
+                    pro.mainAdmin
+                        ? Icons.admin_panel_settings
+                        : pro.pro
                         ? Icons.workspace_premium_rounded
                         : Icons.key_rounded,
                     color: Colors.white),
