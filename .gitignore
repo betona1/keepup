@@ -48,3 +48,7 @@ app.*.map.json
 
 # Gradle build output (android root)
 /android/build/
+
+# 출시 빌드 파일(AAB·APK)은 용량이 커서 저장소에 넣지 않는다 — 출시노트·기록만 커밋
+store/update/**/*.aab
+store/update/**/*.apk
