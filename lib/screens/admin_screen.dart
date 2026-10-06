@@ -102,7 +102,7 @@ class _OverviewTabState extends State<_OverviewTab> {
     final tiles = [
       (Icons.people_alt_outlined, '전체 회원', '${o.users}명'),
       (Icons.workspace_premium_outlined, 'Pro 이용 중', '${o.proActive}명'),
-      (Icons.key_outlined, 'Pro 키', '${o.keys}개 (사용 가능 ${o.keysAvailable})'),
+      (Icons.key_outlined, 'Pro 키 · 사용 가능 ${o.keysAvailable}', '${o.keys}개'),
       (Icons.groups_outlined, '동호회', '${o.crews}개'),
       (Icons.person_pin_outlined, '동호회 회원', '${o.crewMembers}명'),
       (Icons.assignment_outlined, '진행 중 과제', '${o.activeTasks}개'),
